@@ -1,0 +1,43 @@
+# Core Intelligence & Orchestration
+google-api-python-client
+google-generativeai
+google-genai
+openai
+langchain
+langchain-openai
+langgraph
+pydantic
+pydantic-settings
+requests
+ollama
+
+# Search & Scraping
+duckduckgo-search
+playwright
+beautifulsoup4
+trafilatura
+httpx
+
+# Embeddings & Vector Storage
+chromadb
+sentence-transformers
+
+# Data Processing & CLI
+rich
+pandas
+pyyaml
+sqlalchemy
+aioconsole
+
+# Computer Vision & Automation (CV Bot)
+opencv-python
+mss
+pyautogui
+keyboard
+numpy
+
+# Testing
+pytest
+pytest-asyncio
+python-telegram-bot>=21.0.0
+pyperclip

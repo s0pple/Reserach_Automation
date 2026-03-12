@@ -1,0 +1,170 @@
+[
+  {
+    "text": "",
+    "aria_label": "Google-Konto: cassie  \n(cassie.blackw0d@gmail.com), Wichtige Kontowarnung",
+    "classes": "gb_B gb_0a gb_1",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "A"
+  },
+  {
+    "text": "",
+    "aria_label": "Hauptmen\u00fc",
+    "classes": "mdc-icon-button mat-mdc-icon-button mat-mdc-button-base mat-mdc-tooltip-trigger main-menu-button mat-unthemed",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "Auf Google AI Plus upgraden",
+    "aria_label": "Upgrade durchf\u00fchren",
+    "classes": "mdc-button mat-mdc-button-base ng-tns-c353027589-2 mdc-button--unelevated mat-mdc-unelevated-button gds-button-tonal mat-unthemed",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "",
+    "aria_label": "Suche",
+    "classes": "mdc-icon-button mat-mdc-icon-button mat-mdc-button-base mat-mdc-tooltip-trigger search-button ng-tns-c2288663138-6 ng-trigger ng-trigger-searchNavButtonVisibilityAnimation mat-unthemed",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "",
+    "aria_label": "Weitere Optionen f\u00fcr \u201eSwiss Vertical Farming: Opportunities & Outlook\u201c",
+    "classes": "mat-mdc-menu-trigger conversation-actions-menu-button ng-tns-c2627131946-11",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "",
+    "aria_label": "Weitere Optionen f\u00fcr \u201eSwiss Vertical Farming: Opportunities & Challenges\u201c",
+    "classes": "mat-mdc-menu-trigger conversation-actions-menu-button ng-tns-c2627131946-11",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "",
+    "aria_label": "Weitere Optionen f\u00fcr \u201eAnonymisierung von Texten mit Platzhaltern\u201c",
+    "classes": "mat-mdc-menu-trigger conversation-actions-menu-button ng-tns-c2627131946-11",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "",
+    "aria_label": "Aktivit\u00e4tsverlauf in Gemini-Apps",
+    "classes": "mdc-icon-button mat-mdc-icon-button mat-mdc-button-base mat-mdc-menu-trigger mat-ripple mat-mdc-tooltip-trigger side-nav-action-collapsed-button explicit-gmat-override mat-unthemed ng-star-inserted",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "",
+    "aria_label": "Settings & help",
+    "classes": "mdc-icon-button mat-mdc-icon-button mat-mdc-button-base mat-mdc-menu-trigger mat-ripple mat-mdc-tooltip-trigger side-nav-action-collapsed-button explicit-gmat-override mat-unthemed ng-star-inserted",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "\ud83d\uddbc\ufe0f Bild erstellen",
+    "aria_label": "\ud83d\uddbc\ufe0f Bild erstellen, Button, zum Verwenden des Tools antippen",
+    "classes": "mat-ripple card card-zero-state",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "\ud83c\udfb8\u00a0Musik erstellen",
+    "aria_label": "\ud83c\udfb8\u00a0Musik erstellen, Button, zum Verwenden des Tools antippen",
+    "classes": "mat-ripple card card-zero-state",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "Etwas schreiben",
+    "aria_label": "Etwas schreiben, Button, zum Verwenden des Tools antippen",
+    "classes": "mat-ripple card card-zero-state",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "Hilf mir, effizienter zu sein",
+    "aria_label": "Hilf mir, effizienter zu sein, Button, zum Verwenden des Tools antippen",
+    "classes": "mat-ripple card card-zero-state",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "Hilf mir beim Lernen",
+    "aria_label": "Hilf mir beim Lernen, Button, zum Verwenden des Tools antippen",
+    "classes": "mat-ripple card card-zero-state",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "Aktivit\u00e4ten verwalten",
+    "aria_label": null,
+    "classes": "mdc-button mat-mdc-button-base manage-activity-button mat-mdc-button mat-primary",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "Schlie\u00dfen",
+    "aria_label": null,
+    "classes": "mdc-button mat-mdc-button-base dismiss-button mat-mdc-button mat-primary",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "",
+    "aria_label": "Men\u00fc \u201eDatei hochladen\u201c \u00f6ffnen",
+    "classes": "mdc-icon-button mat-mdc-icon-button mat-mdc-button-base mat-mdc-tooltip-trigger upload-card-button open mat-primary ng-star-inserted",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "Tools",
+    "aria_label": null,
+    "classes": "mdc-button mat-mdc-button-base toolbox-drawer-button toolbox-drawer-button-with-label mat-mdc-button ng-tns-c220071530-12 mat-unthemed ng-star-inserted",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "Fast",
+    "aria_label": "Modusauswahl \u00f6ffnen",
+    "classes": "mdc-button mat-mdc-button-base mat-mdc-menu-trigger input-area-switch mat-mdc-button mat-unthemed ng-star-inserted",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "",
+    "aria_label": "Mikrofon",
+    "classes": "mdc-icon-button mat-mdc-icon-button mat-mdc-button-base mat-mdc-tooltip-trigger speech_dictation_mic_button ng-tns-c1564927105-8 mat-unthemed",
+    "id": "",
+    "is_visible": true,
+    "html_tag": "BUTTON"
+  },
+  {
+    "text": "",
+    "aria_label": "Nachricht senden",
+    "classes": "mdc-icon-button mat-mdc-icon-button mat-mdc-button-base send-button ng-tns-c3656692670-7 submit mat-unthemed",
+    "id": "",
+    "is_visible": false,
+    "html_tag": "BUTTON"
+  }
+]

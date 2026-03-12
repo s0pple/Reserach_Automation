@@ -1,0 +1,21 @@
+{
+  "domain": "property management",
+  "test_cases": [
+    {
+      "name": "high_signal_reddit",
+      "text": "I'm a property manager for 200 units. Every single morning I wake up to 40 emails asking where to send rent, or complaining about parking. I spend at least 2 hours daily just copy-pasting the same replies. It's driving me insane. I'd easily pay $100/mo if software just handled this.",
+      "expected_claims": 1,
+      "expected_actor": "property manager",
+      "expected_problem": "replying to repetitive tenant emails",
+      "min_wtp": "high"
+    },
+    {
+      "name": "maintenance_frustration",
+      "text": "As a maintenance dispatcher, I hate how tenants report issues. They send me SMS, WhatsApp, and emails. I lose track of broken pipes constantly. I spend my whole week trying to consolidate tickets.",
+      "expected_claims": 1,
+      "expected_actor": "maintenance dispatcher",
+      "expected_problem": "consolidating maintenance tickets from multiple channels",
+      "min_wtp": "medium"
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+[
+    {
+        "step": 1,
+        "action": "shell_command",
+        "command": "chromium --no-sandbox --disable-dev-shm-usage \"https://www.google.com/\""
+    },
+    {
+        "step": 2,
+        "action": "wait",
+        "duration": 5.0
+    },
+    {
+        "step": 3,
+        "target": "The main Google Search Bar in the middle of the screen",
+        "action": "click"
+    },
+    {
+        "step": 4,
+        "action": "type",
+        "text": "Was ist vertikale Landwirtschaft?"
+    },
+    {
+        "step": 5,
+        "action": "type",
+        "text": "enter"
+    },
+    {
+        "step": 6,
+        "action": "wait",
+        "duration": 4.0
+    },
+    {
+        "step": 7,
+        "action": "extract_clipboard"
+    }
+]

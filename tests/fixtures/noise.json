@@ -1,0 +1,15 @@
+{
+  "domain": "noise",
+  "test_cases": [
+    {
+      "name": "generic_ai_hype",
+      "text": "AI will revolutionize property management. Automation is the future. Companies should adopt AI tools to stay competitive in 2026.",
+      "expected_claims": 0
+    },
+    {
+      "name": "vague_problem",
+      "text": "Life is hard sometimes and work is stressful. We need better solutions for our daily lives.",
+      "expected_claims": 0
+    }
+  ]
+}

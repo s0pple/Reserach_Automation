@@ -1,0 +1,13 @@
+{
+  "domain": "dev_tools",
+  "test_cases": [
+    {
+      "name": "ci_failure_analysis",
+      "text": "Our CI pipeline fails 10 times a day due to flaky tests. As a DevOps engineer, I have to open the logs, find the traceback, and figure out if it's a real bug or just flake. It takes 15 mins every time. I want a tool that just tells me 'this is a flake, ignore it'.",
+      "expected_claims": 1,
+      "expected_actor": "devops engineer",
+      "expected_problem": "manually analyzing flaky CI test failures",
+      "min_wtp": "high"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  cv-agent:
+    build: 
+      context: .
+      dockerfile: Dockerfile.cvbot
+    container_name: research_cv_agent
+    restart: always
+    volumes:
+      # Spiegelung des Research_Automation Projekt-Codes
+      - .:/app
+      # Spiegelung deiner getweakten Gemini CLI Version (Tieferer Ordner wegen GitHub Zip)
+      - C:/Users/olive/Downloads/gemini-cli-main/gemini-cli-main:/gemini-cli-custom
+    environment:
+      # Gibt die API-Keys an den Container weiter
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    # Optional: Ein .env File automatisch laden
+    env_file:
+      - .env

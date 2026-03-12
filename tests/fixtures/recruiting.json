@@ -1,0 +1,21 @@
+{
+  "domain": "recruiting",
+  "test_cases": [
+    {
+      "name": "resume_screening",
+      "text": "I'm an in-house recruiter at a tech firm. We get 500+ applicants for every junior dev role. 90% are completely irrelevant. I spend my entire Sunday manually clicking through PDFs just to find 5 people worth calling. I wish I could just automate the first filter.",
+      "expected_claims": 1,
+      "expected_actor": "recruiter",
+      "expected_problem": "manually screening large volumes of irrelevant resumes",
+      "min_wtp": "high"
+    },
+    {
+      "name": "scheduling_nightmare",
+      "text": "The worst part of being a recruiting coordinator is the calendar dance. Coordinating 4 interviewers with one candidate across 3 timezones takes me 45 minutes per candidate. It's the most mind-numbing part of my job.",
+      "expected_claims": 1,
+      "expected_actor": "recruiting coordinator",
+      "expected_problem": "coordinating interview schedules across timezones",
+      "min_wtp": "medium"
+    }
+  ]
+}

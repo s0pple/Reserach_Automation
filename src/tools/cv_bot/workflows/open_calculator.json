@@ -1,0 +1,17 @@
+[
+    {
+        "step": 1,
+        "target": "Windows Start Button",
+        "action": "click"
+    },
+    {
+        "step": 2,
+        "action": "type",
+        "text": "Rechner"
+    },
+    {
+        "step": 3,
+        "action": "type",
+        "text": "enter"
+    }
+]

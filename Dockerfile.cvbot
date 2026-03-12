@@ -1,0 +1,43 @@
+FROM python:3.11-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 1. System-Abhängigkeiten (Dein funktionierendes Setup)
+RUN apt-get update && apt-get install -y \
+    xvfb \
+    x11-utils \
+    scrot \
+    gnome-screenshot \
+    xclip \
+    xsel \
+    libnss3 \
+    libxss1 \
+    libasound2 \
+    chromium \
+    fonts-liberation \
+    libgl1 \
+    libglib2.0-0 \
+    python3-tk \
+    python3-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 2. Python Pakete
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+RUN playwright install chromium
+RUN playwright install-deps
+
+# 3. NEU: Node.js & Gemini CLI für den "God Mode" installieren
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs
+RUN npm install -g @google/gemini-cli-core
+
+# 4. Start-Skript kopieren und Rechte vergeben
+COPY start_ai_mode.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/start_ai_mode.sh
+
+# Container am Leben halten
+CMD ["tail", "-f", "/dev/null"]

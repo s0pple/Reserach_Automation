@@ -1,52 +1,57 @@
 # Git & Backup Strategy (Agentic Workflow Integration)
 
 ## Das Problem
-In einer komplett autonomen Umgebung ("God Container") haben KI-Agenten Root-Rechte und können in Millisekunden tausende Zeilen Code schreiben oder löschen. Um fatalen Fehlern (Halluzinationen, Löschen falscher Verzeichnisse) vorzubeugen, muss Git als **striktes Sicherheitsnetz (Undo-Button)** etabliert werden.
+In einer komplett autonomen Umgebung ("God Container") haben KI-Agenten Root-Rechte und können in Millisekunden tausende Zeilen Code schreiben oder löschen. Um fatalen Fehlern (Halluzinationen, Löschen falscher Verzeichnisse, versehentliches Überschreiben) vorzubeugen, wird Git als **striktes, deterministisches Sicherheitsnetz** etabliert.
 
 ## Die Strategie: "Branch-Driven Agentic Development"
+KI-Agenten arbeiten ab sofort NIE wieder direkt auf dem `main`-Branch. Jede Aufgabe wird in einem isolierten Feature-Branch ausgeführt und muss ein "Quality Gate" passieren, bevor sie committet wird.
 
-KI-Agenten arbeiten ab sofort NIE wieder direkt auf dem `main`-Branch. Jede Aufgabe wird in einem isolierten Feature-Branch ausgeführt. Erst wenn der User (Manager) die Funktionalität verifiziert hat, wird in den `main`-Branch gemerged.
+### Der Workflow (Der 5-Phasen-Loop)
 
-### Der Workflow (Der 4-Phasen-Loop)
-
-#### 1. Die Mission (Manager)
+#### 1. Die Mission (Manager / Human)
 - Der User vergibt eine neue Aufgabe (z.B. "Baue den Telegram-Controller").
-- Die Aufgabe wird in einem `plan.md` Dokument festgehalten.
+- Die Aufgabe und die Akzeptanzkriterien werden in einem `plan.md` Dokument festgehalten.
 
 #### 2. Der sichere Raum (Worker / Agent)
-- Bevor der Agent auch nur *eine* Codezeile ändert, **muss** er einen neuen Branch erstellen, der nach dem Feature benannt ist:
+- Der Agent prüft den Status (`git status`). Ist der Workspace unsauber, bricht er ab und fragt den User.
+- Der Agent erstellt einen isolierten Branch:
   ```bash
   git checkout -b feat/telegram-controller
   ```
-- Der Agent arbeitet autonom auf diesem Branch (Dateien editieren, Skripte testen, Abhängigkeiten installieren).
+- Der Agent arbeitet autonom auf diesem Branch.
 
-#### 3. Der Checkpoint (Worker / Agent)
-- Sobald das Feature funktioniert (z.B. der Test-Script-Lauf war erfolgreich), macht der Agent selbstständig einen Commit:
+#### 3. Das Quality Gate & Verification (Worker / Agent)
+- Bevor der Agent Code als "fertig" deklariert, **muss** er die Funktionalität prüfen (Ausführen des Skripts, Linter oder Syntax-Check). Der Exit-Code muss `0` sein.
+- **Self-Review:** Der Agent führt `git diff` aus und prüft kritisch: *"Habe ich versehentlich Code gelöscht, der nicht zu meiner Aufgabe gehört?"*
+
+#### 4. Der Checkpoint (Worker / Agent)
+- Erst nach erfolgreichem Quality Gate und Self-Review macht der Agent den Commit nach Conventional Commits Standard:
   ```bash
   git add .
-  git commit -m "feat: Telegram Controller Phase 1 abgeschlossen"
+  git commit -m "feat(telegram): implementiere basis controller logik"
   ```
-- Der Agent meldet dem User: "Arbeit auf Branch 'feat/telegram-controller' abgeschlossen und lokal committet. Bitte auf Windows testen."
+- Der Agent meldet dem User: "Mission auf Branch 'feat/telegram-controller' abgeschlossen. Bitte auf Windows testen."
 
-#### 4. Die Verschmelzung (Manager)
-- Der User testet das Feature auf seinem Windows-System (oder im Container).
-- Ist alles perfekt, gibt der User den Befehl zur Verschmelzung (Merge):
+#### 5. Die Verschmelzung (Manager / Human)
+- Der User testet das Feature.
+- Ist alles perfekt, übernimmt der User den Merge:
   ```bash
   git checkout main
   git merge feat/telegram-controller
-  git push origin main
+  git branch -d feat/telegram-controller
   ```
-- Der Feature-Branch kann danach gelöscht werden (`git branch -d feat/telegram-controller`).
 
-## Fallback: Die "Undo"-Notbremse
-Sollte der Agent auf seinem Feature-Branch ein totales Chaos anrichten (z.B. Dateien löschen), ist das System sicher. Der User oder der Agent selbst führt einfach aus:
+## Fallback: Die "Scorched Earth" Notbremse
+Sollte der Agent ein totales Chaos anrichten (kaputter Code + halluzinierte Müll-Dateien), wird der Branch rigoros auf den letzten sauberen Zustand zurückgesetzt.
 ```bash
 git reset --hard HEAD
+git clean -fd
 ```
-Damit wird der gesamte Code sofort auf den Zustand des letzten sauberen Commits zurückgesetzt. Nichts ist verloren.
+*(Achtung: `clean -fd` löscht alle neuen, ungetrackten Dateien und Ordner. Das ist der ultimative Undo-Button).*
 
 ## Agent Instructions (Zusatz für GEMINI.md)
-*Diese Regeln müssen in die System-Prompt (`GEMINI.md`) aufgenommen werden:*
-1. **Never code on Main:** Bevor du mit einer neuen Aufgabe beginnst, prüfe mit `git status` auf welchem Branch du bist. Wenn du auf `main` bist, erstelle einen neuen `feat/...` Branch.
-2. **Commit often:** Nach jedem erfolgreichen Zwischenschritt (z.B. wenn ein Skript fehlerfrei durchläuft), nutze `git add` und `git commit`, um einen Speicherpunkt zu setzen.
-3. **Rollback before loop:** Wenn du einen Fehler nach 3 Versuchen (Anti-Loop-Policy) nicht beheben kannst, setze deinen Code mit `git checkout -- <file>` auf den Ursprungszustand zurück, bevor du den User fragst.
+*Diese System-Regeln sind zwingend bei jedem Aufruf zu beachten:*
+1. **Never code on Main:** Prüfe immer mit `git branch`, wo du bist. Erstelle für jeden Plan einen neuen `feat/...` oder `fix/...` Branch.
+2. **Review before Commit:** Du darfst **niemals** blind `git add .` ausführen. Du musst vorher `git diff` aufrufen und deine Änderungen verifizieren. Achte besonders auf unabsichtlich gelöschten Code!
+3. **Pass the Gate:** Ein Commit erfolgt erst, wenn der Code ausführbar ist und keine offensichtlichen Syntax-Fehler wirft.
+4. **Scorched Earth Rollback:** Wenn du dich nach 3 Versuchen in einem fehlerhaften Code-Loop verfängst, nutze `git reset --hard HEAD && git clean -fd`, um deinen eigenen Müll zu beseitigen, bevor du eine neue Herangehensweise planst.

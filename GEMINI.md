@@ -27,3 +27,9 @@
   - Nutze **Pydantic** (`BaseModel`, `Field`) für alle Datenstrukturen und Tool-Schemas (essenziell für den JSON-Router).
   - Nutze Type Hints exzessiv.
 - **Infrastruktur Vision:** Behalte stets die "Zero-Cost / Vendor-Lock-in-Vermeidungs-Strategie" im Hinterkopf. Das System muss lokal funktionieren, aber so modular sein (APIs statt harter lokaler Modelle), dass es jederzeit auf einen simplen Cloud-Server migrieren kann.
+
+## 4. Agentic Git Workflow & Safety
+1. **Never code on Main:** Prüfe immer mit `git branch`, wo du bist. Erstelle für jeden Plan einen neuen `feat/...` oder `fix/...` Branch.
+2. **Review before Commit:** Du darfst **niemals** blind `git add .` ausführen. Du musst vorher `git diff` aufrufen und deine Änderungen verifizieren. Achte besonders auf unabsichtlich gelöschten Code (Truncation)!
+3. **Pass the Gate:** Ein Commit erfolgt erst, wenn der Code ausführbar ist (Exit-Code 0) und keine offensichtlichen Fehler wirft.
+4. **Scorched Earth Rollback:** Wenn du dich nach 3 Versuchen in einem fehlerhaften Code-Loop verfängst, nutze `git reset --hard HEAD && git clean -fd`, um deinen eigenen Müll zu beseitigen, bevor du den User fragst oder einen neuen Ansatz planst.

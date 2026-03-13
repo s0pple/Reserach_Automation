@@ -26,27 +26,28 @@
 - **Priority:** Medium | **Tags:** `[Agent-Workflow]`
 - **Context:** Sobald das Venture Memo steht, baut ein Agent (z.B. Aider) den ersten Code-Prototyp.
 
+### 🧠 Tech Stack Evolution (Future Improvements)
+- **Priority:** Medium | **Tags:** `[Infrastructure]`, `[Memory]`, `[Testing]`
+- **Context:** Integration von **OpenViking** (hierarchisches Langzeitgedächtnis) und **promptfoo** (automatisierte Quality Gates für den Router).
+- **Goal:** Das System muss aus Fehlern lernen und die Zuverlässigkeit der Tool-Entscheidungen messbar machen.
+
 ### 🗂️ Template-Management & Ordnerstruktur für den CV-Bot
 - **Priority:** Low | **Tags:** `[Refactoring]`
 - **Context:** Die gespeicherten Templates müssen strukturiert abgelegt werden (nach Betriebssystem, Browser, Webseite etc.), damit es bei vielen Workflows nicht zu Konflikten kommt.
 
 ---
 
-## 📝 Ready for Planning (Manager Phase)
-
-### 🖥️ Docker Xvfb-Sandboxing für Hybrid-Pipeline aufsetzen
-- **Priority:** High | **Tags:** `[Infrastructure]`
-- **Context:** Wir implementieren "Option 2" (OpenClaw-Weg). Ein Docker-Container mit virtuellem Framebuffer (Linux), in dem Playwright und der CV-Bot sicher und skalierbar laufen können. Das Setup kann direkt über die Gemini CLI Sandbox gespiegelt getestet werden.
-
----
-
 ## 🚀 In Progress (Der nächste große Wurf)
+
+### 🖥️ Docker Xvfb-Sandboxing & God Container (Finalisierung)
+- **Priority:** High | **Tags:** `[Infrastructure]`
+- **Status (13. März 2026):** Der God-Container läuft. Aktuelle Phase: Self-Healing des CV-Bots in der Linux-Umgebung (Google-Suche Workflow). 
 
 ### 📱 Telegram Bot Interface (Der Controller)
 - **Priority:** High | **Tags:** `[UI]`, `[Trigger]`
-- **Context:** Anstatt CLI-Befehle zu tippen, steuern wir den Orchestrator via Telegram-Nachrichten (`/research AI Logistics` oder `/shop Buy new mouse`).
-- **Status (11. März 2026):** Code für Phase 1 (`runs/telegram_bot.py`) ist geschrieben. 
-- **NEXT STEP FÜR DIE NÄCHSTE SESSION:** User muss den Bot bei BotFather erstellen, `.env` anlegen, `pip install python-telegram-bot python-dotenv` ausführen und das Quality Gate von Phase 1 (Ping/Pong) testen. Danach direkt mit Phase 2 weitermachen. Plan liegt in `docs/plans/03_plan_telegram_bot.md`.
+- **Context:** Anstatt CLI-Befehle zu tippen, steuern wir den Orchestrator via Telegram-Nachrichten (`/research AI Logistics`).
+- **Status (13. März 2026):** Phase 1 vorbereitet. User richtet gerade API-Token & ID ein.
+- **NEXT STEP:** Ping/Pong Test & Router-Anbindung (Phase 2).
 
 ---
 

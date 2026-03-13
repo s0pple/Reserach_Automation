@@ -34,3 +34,10 @@
 2. **Review before Commit:** Du darfst **niemals** blind `git add .` ausführen. Du musst vorher `git diff` aufrufen und deine Änderungen verifizieren. Achte besonders auf unabsichtlich gelöschten Code (Truncation)!
 3. **Pass the Gate:** Ein Commit erfolgt erst, wenn der Code ausführbar ist (Exit-Code 0) und keine offensichtlichen Fehler wirft.
 4. **Scorched Earth Rollback:** Wenn du dich nach 3 Versuchen in einem fehlerhaften Code-Loop verfängst, nutze `git reset --hard HEAD && git clean -fd`, um deinen eigenen Müll zu beseitigen, bevor du den User fragst oder einen neuen Ansatz planst.
+
+## 5. Architecture V2 (Die 3 Skalierungs-Gesetze)
+BEVOR du Änderungen an der Codebase vornimmst, beachte strikt diese 3 Gesetze:
+1. **Multi-Agent State Isolation (Das Anti-Überschreib-Gesetz):** Jeder Agent braucht zur Laufzeit seinen eigenen isolierten State. Schreibe niemals ungeschützt nach `/temp/` oder `/data/sessions/`. Nutze dynamische Job-IDs (z.B. `/temp/jobs/job_123/`), um Race-Conditions bei parallelen Agenten zu verhindern.
+2. **Git Worktree & Experiment-Isolation (Das Sandkasten-Gesetz):** Wenn du im God-Container experimentierst (z.B. neue CV-Bot-Routinen), darfst du **niemals** direkt auf dem `main`-Branch arbeiten oder dort Dateien verschieben. Erstelle IMMER einen `experiment/...`-Branch.
+3. **Modulare Interfaces (Kein `/runs`):** Der `/runs`-Ordner ist tot. Entrypoints gehören in das Modul `src/interfaces/` (z.B. `src/interfaces/telegram/bot.py`) und werden über eine zentrale `main.py` im Root aufgerufen, um Python-Import-Fehler zu vermeiden. Detaillierte Infos unter `docs/knowledge_base/architecture_v2_multi_agent.md`.
+

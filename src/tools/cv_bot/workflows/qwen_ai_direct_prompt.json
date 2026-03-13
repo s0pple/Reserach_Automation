@@ -1,0 +1,66 @@
+[
+    {
+        "step": 1,
+        "action": "shell_command",
+        "command": "chromium --no-sandbox --disable-dev-shm-usage --disable-gpu --window-size=1280,1200 --force-device-scale-factor=1 --incognito --app=\"https://chat.qwen.ai/\""
+    },
+    {
+        "step": 2,
+        "action": "wait",
+        "duration": 5.0
+    },
+    {
+        "step": 3,
+        "action": "screenshot",
+        "text": "qwen_initial_view.png"
+    },
+    {
+        "step": 4,
+        "action": "click",
+        "target": "the close button of the image style banner"
+    },
+    {
+        "step": 5,
+        "action": "click",
+        "target": "the central text input area"
+    },
+    {
+        "step": 6,
+        "action": "type",
+        "text": "ERSTELLE EINE TIEFE MARKTANALYSE: Zukunft der KI-Infrastruktur 2030. Analysiere Hardware-Trends (NVLink 6, Blackwell), Energieprobleme und Software-Stacks. Sei extrem detailliert und strukturiert."
+    },
+    {
+        "step": 7,
+        "action": "wait",
+        "duration": 1.0
+    },
+    {
+        "step": 8,
+        "action": "type",
+        "text": "enter"
+    },
+    {
+        "step": 9,
+        "action": "wait",
+        "duration": 30.0
+    },
+    {
+        "step": 10,
+        "action": "screenshot",
+        "text": "qwen_response_progress.png"
+    },
+    {
+        "step": 11,
+        "action": "wait",
+        "duration": 30.0
+    },
+    {
+        "step": 12,
+        "action": "screenshot",
+        "text": "qwen_final_view.png"
+    },
+    {
+        "step": 13,
+        "action": "extract_clipboard"
+    }
+]

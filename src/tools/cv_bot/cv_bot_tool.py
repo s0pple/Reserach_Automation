@@ -74,6 +74,7 @@ class CVBotTool(BaseTool):
             )
             
             text = response.text.strip()
+            print(f"[CV-Bot] 🤖 Raw Gemini Response: {text}")
             # Clean up potential markdown formatting if Gemini disobeys "no markdown" rule
             if text.startswith("```json"):
                 text = text[7:-3].strip()

@@ -1,0 +1,56 @@
+[
+    {
+        "step": 1,
+        "action": "shell_command",
+        "command": "chromium --no-sandbox --disable-dev-shm-usage --disable-gpu --window-size=1280,1200 --force-device-scale-factor=1 --incognito --app=\"https://chat.qwen.ai/\""
+    },
+    {
+        "step": 2,
+        "action": "wait",
+        "duration": 10.0
+    },
+    {
+        "step": 3,
+        "action": "type",
+        "text": "escape"
+    },
+    {
+        "step": 4,
+        "action": "wait",
+        "duration": 2.0
+    },
+    {
+        "step": 5,
+        "action": "click",
+        "target": "the central search input field area"
+    },
+    {
+        "step": 6,
+        "action": "type",
+        "text": "Führe eine Marktanalyse zur KI-Infrastruktur 2030 durch. Sei extrem detailliert."
+    },
+    {
+        "step": 7,
+        "action": "wait",
+        "duration": 1.0
+    },
+    {
+        "step": 8,
+        "action": "type",
+        "text": "enter"
+    },
+    {
+        "step": 9,
+        "action": "wait",
+        "duration": 60.0
+    },
+    {
+        "step": 10,
+        "action": "screenshot",
+        "text": "qwen_victory_view.png"
+    },
+    {
+        "step": 11,
+        "action": "extract_clipboard"
+    }
+]

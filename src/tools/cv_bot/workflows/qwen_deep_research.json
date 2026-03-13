@@ -1,0 +1,63 @@
+[
+    {
+        "step": 1,
+        "action": "shell_command",
+        "command": "chromium --no-sandbox --disable-dev-shm-usage --disable-gpu --window-size=1280,1200 --force-device-scale-factor=1 --incognito --app=\"https://chat.qwen.ai/\""
+    },
+    {
+        "step": 2,
+        "action": "wait",
+        "duration": 8.0
+    },
+    {
+        "step": 3,
+        "action": "click",
+        "x": 500,
+        "y": 10
+    },
+    {
+        "step": 4,
+        "action": "type",
+        "text": "esc"
+    },
+    {
+        "step": 5,
+        "action": "wait",
+        "duration": 1.0
+    },
+    {
+        "step": 6,
+        "action": "click",
+        "x": 305,
+        "y": 532
+    },
+    {
+        "step": 7,
+        "action": "wait",
+        "duration": 1.0
+    },
+    {
+        "step": 8,
+        "action": "type",
+        "text": "how to enable deep research"
+    },
+    {
+        "step": 9,
+        "action": "wait",
+        "duration": 1.0
+    },
+    {
+        "step": 10,
+        "action": "type",
+        "text": "enter"
+    },
+    {
+        "step": 11,
+        "action": "wait",
+        "duration": 15.0
+    },
+    {
+        "step": 12,
+        "action": "extract_clipboard"
+    }
+]

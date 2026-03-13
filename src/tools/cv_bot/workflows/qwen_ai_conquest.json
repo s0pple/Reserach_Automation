@@ -1,0 +1,61 @@
+[
+    {
+        "step": 1,
+        "action": "shell_command",
+        "command": "chromium --no-sandbox --disable-dev-shm-usage --disable-gpu --window-size=1280,1200 --force-device-scale-factor=1 --incognito --app=\"https://chat.qwen.ai/\""
+    },
+    {
+        "step": 2,
+        "action": "wait",
+        "duration": 5.0
+    },
+    {
+        "step": 3,
+        "action": "click",
+        "target": "the close button of the image style banner"
+    },
+    {
+        "step": 4,
+        "action": "click",
+        "target": "the 'Auto' or model selection dropdown button next to the input field"
+    },
+    {
+        "step": 5,
+        "action": "wait",
+        "duration": 2.0
+    },
+    {
+        "step": 6,
+        "action": "click",
+        "target": "the 'Research' or 'Deep Research' option"
+    },
+    {
+        "step": 7,
+        "action": "click",
+        "target": "the central text input area"
+    },
+    {
+        "step": 8,
+        "action": "type",
+        "text": "Führe einen Deep Research zur Zukunft der KI-Infrastruktur 2030 durch."
+    },
+    {
+        "step": 9,
+        "action": "wait",
+        "duration": 1.0
+    },
+    {
+        "step": 10,
+        "action": "type",
+        "text": "enter"
+    },
+    {
+        "step": 11,
+        "action": "wait",
+        "duration": 60.0
+    },
+    {
+        "step": 12,
+        "action": "extract_clipboard"
+    }
+]

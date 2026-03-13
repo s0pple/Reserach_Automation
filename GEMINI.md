@@ -20,7 +20,8 @@
 ## 3. Architektur & Code Standards
 - **Read-Only Infrastructure:** Verändere Kern-Komponenten (wie `src/core/secret.py`, Orchestrator Loops) nur, wenn ausdrücklich beauftragt. Respektiere Modulgrenzen.
 - **Code Preservation (Anti-Slop):** Wenn du bestehenden Code anpasst, lösche keine menschlichen Kommentare und verändere nicht die Signatur (Input/Output) von bestehenden Funktionen, es sei denn, der Plan verlangt es explizit.
-- **Security First:** Hardcode **niemals** API-Keys, Tokens oder absolute lokale Pfade (`C:/...`). Nutze ausschließlich `os.getenv()` aus der `.env`-Datei und relative Pfade. Weise den User an, neue Keys in seiner `.env` zu ergänzen.
+- **Bot-Wall Conquest:** Wenn Webseiten (wie Qwen, DeepSeek, OpenAI) aggressive Anti-Bot-Banner oder Login-Zwang zeigen, nutze keine rohen Playwright-Scraper. Verwende stattdessen `playwright.launch_persistent_context` mit den Profilen aus `browser_sessions/google_searcher`. Dies lädt eine authentifizierte Google-Session, die Banner eliminiert und den Weg für visuelle oder DOM-basierte Automatisierung frei macht.
+- **Sight & Touch Hybrid:** Nutze den CV-Bot zur Lokalisierung von Buttons, aber führe Klicks und Eingaben bevorzugt über das Playwright `page.mouse` oder `page.keyboard` API aus, wenn das Profil geladen ist.
 - **Python-Regeln:** 
   - Nutze konsequent asynchrones Python (`asyncio`), besonders bei LLM-Calls und API-Anfragen.
   - Kapsele blockierenden, synchronen Code (wie `pyautogui` oder `cv2`) immer in `asyncio.to_thread()`, um den Event-Loop nicht zu blockieren.

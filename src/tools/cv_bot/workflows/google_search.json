@@ -2,7 +2,7 @@
     {
         "step": 1,
         "action": "shell_command",
-        "command": "chromium --no-sandbox --disable-dev-shm-usage \"https://www.google.com/\""
+        "command": "chromium --no-sandbox --disable-dev-shm-usage --disable-gpu --window-size=1280,1200 --force-device-scale-factor=1 --incognito --app=\"https://www.google.com/search?q=Was+ist+vertikale+Landwirtschaft%3F\""
     },
     {
         "step": 2,
@@ -11,26 +11,62 @@
     },
     {
         "step": 3,
-        "target": "The main Google Search Bar in the middle of the screen",
-        "action": "click"
+        "action": "click",
+        "x": 500,
+        "y": 10
     },
     {
         "step": 4,
         "action": "type",
-        "text": "Was ist vertikale Landwirtschaft?"
+        "text": "esc"
     },
     {
         "step": 5,
         "action": "type",
-        "text": "enter"
+        "text": "pagedown"
     },
     {
         "step": 6,
-        "action": "wait",
-        "duration": 4.0
+        "action": "type",
+        "text": "pagedown"
     },
     {
         "step": 7,
+        "action": "wait",
+        "duration": 1.0
+    },
+    {
+        "step": 8,
+        "target": "The blue button with the exact text 'Alle akzeptieren' in the bottom-right of the dialog",
+        "action": "click"
+    },
+    {
+        "step": 9,
+        "action": "type",
+        "text": "enter"
+    },
+    {
+        "step": 10,
+        "action": "wait",
+        "duration": 1.0
+    },
+    {
+        "step": 11,
+        "action": "type",
+        "text": "tab"
+    },
+    {
+        "step": 12,
+        "action": "type",
+        "text": "enter"
+    },
+    {
+        "step": 13,
+        "action": "wait",
+        "duration": 5.0
+    },
+    {
+        "step": 14,
         "action": "extract_clipboard"
     }
 ]

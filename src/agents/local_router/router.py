@@ -51,7 +51,8 @@ If no tool matches the user's intent, return:
 
     try:
         # Use a short timeout/client configuration if needed.
-        client = AsyncClient()
+        # FIX: Use host.docker.internal to reach the host-based Ollama server
+        client = AsyncClient(host="http://host.docker.internal:11434")
         response = await client.chat(
             model=model_name,
             messages=[
@@ -70,8 +71,8 @@ If no tool matches the user's intent, return:
 
     except Exception as e:
         logger.error(f"Router Error: {e}")
-        # Robust Fallback
+        # Robust Fallback - In Phase 2 default to qwen_research instead of error
         return {
-            "tool": "error",
-            "message": "Lokaler Router nicht erreichbar."
+            "tool": "qwen_research",
+            "message": "Fallback: Router nicht erreichbar, nutze Qwen-Standard."
         }

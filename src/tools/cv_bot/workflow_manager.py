@@ -55,14 +55,18 @@ class WorkflowManager:
             duration = step.get("duration")
             command = step.get("command")
 
+            x_coord = step.get("x")
+            y_coord = step.get("y")
+
             print(f"\n▶️ [Step {step_num}] Action: {action}" + 
                   (f" | Target: '{target}'" if target else "") + 
                   (f" | Text: '{text}'" if text else "") +
                   (f" | Keys: {keys}" if keys else "") +
                   (f" | Duration: {duration}s" if duration else "") +
-                  (f" | Command: '{command}'" if command else ""))
+                  (f" | Command: '{command}'" if command else "") +
+                  (f" | X:{x_coord} Y:{y_coord}" if x_coord is not None else ""))
 
-            x, y = None, None
+            x, y = x_coord, y_coord
 
             if target:
                 try:
@@ -75,6 +79,12 @@ class WorkflowManager:
                     print(f"🔄 Triggering Vision Self-Healing for '{target}'...")
                     
                     image_bytes, img_bgra, offset_x, offset_y = self._get_screenshot_bytes()
+                    
+                    # Debug: Save screenshot to file
+                    with open("debug_screen.png", "wb") as f:
+                        f.write(image_bytes)
+                    print("📸 Debug screenshot saved to 'debug_screen.png'")
+                    
                     result = await self.cv_tool.find_element_via_vision(
                         image_bytes, target, original_bgra=img_bgra, 
                         offset_x=offset_x, offset_y=offset_y
@@ -90,20 +100,43 @@ class WorkflowManager:
             # 3. ACTION AUSFÜHREN (mit asyncio.to_thread)
             if action == "click":
                 if x is not None and y is not None:
-                    print(f"🖱️ Clicking at X:{x}, Y:{y}")
-                    await asyncio.to_thread(pyautogui.click, x, y)
+                    print(f"🖱️ Clicking at X:{x}, Y:{y} using xdotool")
+                    # Move and click using xdotool for better Docker/Xvfb compatibility
+                    os.system(f"xdotool mousemove {x} {y} click 1")
                 else:
                     print("❌ Action 'click' requires a target with valid coordinates. Stopping.")
                     return {"success": False, "error": "Invalid coordinates for click"}
                     
             elif action == "type":
                 if text:
-                    if text.lower() == "enter":
-                        print(f"⌨️ Pressing ENTER key")
-                        await asyncio.to_thread(pyautogui.press, "enter")
+                    t_lower = text.lower()
+                    if t_lower in ["enter", "tab", "esc", "escape", "pagedown", "pageup"]:
+                        key_map = {
+                            "enter": "enter", "tab": "tab", "esc": "esc", "escape": "esc",
+                            "pagedown": "pagedown", "pageup": "pageup"
+                        }
+                        key = key_map[t_lower]
+                        print(f"⌨️ Pressing {key.upper()} key via xdotool")
+                        if key == "enter":
+                            key = "Return"
+                        elif key == "esc":
+                            key = "Escape"
+                        elif key == "tab":
+                            key = "Tab"
+                        elif key == "pagedown":
+                            key = "Page_Down"
+                        elif key == "pageup":
+                            key = "Page_Up"
+                        await asyncio.to_thread(os.system, f"xdotool key {key}")
                     else:
-                        print(f"⌨️ Typing: '{text}'")
-                        await asyncio.to_thread(pyautogui.write, text, interval=0.05)
+                        print(f"⌨️ Typing: '{text}' via xdotool")
+                        import subprocess
+                        # Escape quotes for bash
+                        safe_text = text.replace('"', '\\"')
+                        # Force window focus first
+                        os.system("xdotool windowactivate $(xdotool search --onlyvisible --class chromium | head -1) 2>/dev/null")
+                        await asyncio.sleep(0.5)
+                        await asyncio.to_thread(os.system, f'xdotool type --delay 50 "{safe_text}"')
                 else:
                     print("❌ Action 'type' requires 'text'. Stopping.")
                     return {"success": False, "error": "Type requires text"}
@@ -134,16 +167,32 @@ class WorkflowManager:
                     print("❌ Action 'shell_command' requires a 'command'. Stopping.")
                     return {"success": False, "error": "Shell command requires command"}
                     
+            elif action == "screenshot":
+                filename = text if text else f"workflow_step_{step_num}.png"
+                filepath = os.path.join("test", filename)
+                print(f"📸 Taking screenshot: {filepath}")
+                image_bytes, _, _, _ = self._get_screenshot_bytes()
+                with open(filepath, "wb") as f:
+                    f.write(image_bytes)
+                    
             elif action == "extract_clipboard":
                 print("📋 Extracting text from clipboard...")
                 await asyncio.to_thread(pyautogui.hotkey, 'ctrl', 'a')
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(0.5)
                 await asyncio.to_thread(pyautogui.hotkey, 'ctrl', 'c')
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(0.5)
                 
-                # Retrieve from clipboard
-                extracted_text = pyperclip.paste()
-                print(f"✂️ Copied {len(extracted_text)} characters from clipboard.")
+                # Retrieve from clipboard - use xclip directly on Linux for reliability
+                import subprocess
+                try:
+                    process = subprocess.Popen(['xclip', '-selection', 'clipboard', '-o'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    stdout, stderr = process.communicate()
+                    extracted_text = stdout.decode('utf-8', errors='ignore')
+                    print(f"✂️ Copied {len(extracted_text)} characters from clipboard using xclip.")
+                except Exception as e:
+                    print(f"⚠️ xclip failed, trying pyperclip: {e}")
+                    extracted_text = pyperclip.paste()
+                    print(f"✂️ Copied {len(extracted_text)} characters from clipboard using pyperclip.")
                     
             else:
                 print(f"❌ Unknown action: '{action}'. Stopping.")

@@ -15,14 +15,25 @@ async def main():
     
     workflow_name = "google_search"
     workflow_steps = [
-        {"step": 1, "action": "shell_command", "command": "chromium --no-sandbox --disable-dev-shm-usage \"https://www.google.com/\""},
-        {"step": 2, "action": "wait", "duration": 5.0}, # Wait for Chrome and Google to load
-        # The critical self-healing step: Find the search bar
-        {"step": 3, "target": "The main Google Search Bar in the middle of the screen", "action": "click"},
-        {"step": 4, "action": "type", "text": "Was ist vertikale Landwirtschaft?"},
-        {"step": 5, "action": "type", "text": "enter"},
-        {"step": 6, "action": "wait", "duration": 4.0}, # Wait for Google to load results
-        {"step": 7, "action": "extract_clipboard"}
+        {"step": 1, "action": "shell_command", "command": "chromium --no-sandbox --disable-dev-shm-usage --disable-gpu --window-size=1280,1200 --force-device-scale-factor=1 --incognito --app=\"https://www.google.com/search?q=Was+ist+vertikale+Landwirtschaft%3F\""},
+        {"step": 2, "action": "wait", "duration": 5.0}, # Wait for results to load
+        # Focus window
+        {"step": 3, "action": "click", "x": 500, "y": 10}, 
+        # Clear any prompts
+        {"step": 4, "action": "type", "text": "esc"},
+        # Scroll down more to ensure buttons are visible
+        {"step": 5, "action": "type", "text": "pagedown"},
+        {"step": 6, "action": "type", "text": "pagedown"},
+        {"step": 7, "action": "wait", "duration": 1.0},
+        # Try to accept cookies if banner is there (Self-healing will trigger if target is visible)
+        {"step": 8, "target": "The blue button with the exact text 'Alle akzeptieren' in the bottom-right of the dialog", "action": "click"},
+        {"step": 9, "action": "type", "text": "enter"},
+        {"step": 10, "action": "wait", "duration": 1.0},
+        {"step": 11, "action": "type", "text": "tab"},
+        {"step": 12, "action": "type", "text": "enter"},
+        {"step": 13, "action": "wait", "duration": 5.0},
+        # Extract the results
+        {"step": 14, "action": "extract_clipboard"}
     ]
     
     # Save the workflow to JSON first

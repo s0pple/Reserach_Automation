@@ -4,12 +4,19 @@ if ! pgrep -x "Xvfb" > /dev/null
 then
     echo "🖥️ Starte virtuellen Monitor (:99)..."
     rm -f /tmp/.X99-lock
-    Xvfb :99 -screen 0 1920x1080x24 &
+    # Fix für den Xauth-Fehler und virtuellen Monitor starten
+    touch ~/.Xauthority
+    Xvfb :99 -ac -screen 0 1920x1080x24 &
 else
     echo "🖥️ Virtueller Monitor (:99) läuft bereits."
 fi
 
 export DISPLAY=:99
+
+# Zwinge Linux in den 256-Farben-Modus (behebt das Color-Bugging im Docker-Terminal)
+export TERM=xterm-256color
+export COLORTERM=truecolor
+export FORCE_COLOR=1
 
 echo "🤖 Starte God-Container AI (Custom Gemini CLI)..."
 

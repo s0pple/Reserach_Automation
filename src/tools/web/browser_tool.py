@@ -7,7 +7,7 @@ class BrowserSearchArguments(ToolArguments):
     """Arguments for the Browser Search tool."""
     query: str = Field(..., description="The search query or deep research prompt.")
     persona: str = Field("main", description="The browser persona/profile to use.")
-    headless: bool = Field(True, description="Whether to run the browser in headless mode.")
+    headless: bool = Field(False, description="Whether to run the browser in headless mode.")
     deep_research: bool = Field(False, description="Whether to trigger Gemini's Deep Research mode.")
 
 class BrowserSearchTool(BaseTool):

@@ -7,7 +7,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 
 # Project Imports
 from src.agents.local_router.router import analyze_intent
-from src.tools.web_scraper.qwen_researcher import register as register_qwen, qwen_research_tool
+from src.tools.web.qwen_researcher import register as register_qwen, qwen_research_tool
 
 # Register all tools once
 register_qwen()
@@ -51,6 +51,68 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "`Zukunft der Solarenergie 2030`"
     )
     await context.bot.send_message(chat_id=update.effective_chat.id, text=welcome_text, parse_mode='Markdown')
+
+import time
+
+async def watch(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Rule 1 & 2: Asynchroner Watchtower (Live-Screenshot)"""
+    if not await is_authorized(update):
+        return
+        
+    chat_id = update.effective_chat.id
+    status_msg = await context.bot.send_message(chat_id=chat_id, text="📸 *Hole Live-Bild vom God-Container (:99)...*", parse_mode='Markdown')
+    
+    timestamp = int(time.time())
+    filepath = f"temp/watchtower_{timestamp}.png"
+    
+    try:
+        os.makedirs("temp", exist_ok=True)
+        
+        # Asynchroner Screenshot via scrot (non-blocking)
+        env = os.environ.copy()
+        env["DISPLAY"] = ":99"
+        
+        process = await asyncio.create_subprocess_exec(
+            'scrot', filepath,
+            env=env,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode == 0 and os.path.exists(filepath):
+            with open(filepath, 'rb') as photo:
+                await context.bot.send_photo(
+                    chat_id=chat_id,
+                    photo=photo,
+                    caption="👁️ *The Watchtower:* Live-Ansicht aus dem Xvfb-Monitor.",
+                    parse_mode='Markdown'
+                )
+            await context.bot.delete_message(chat_id=chat_id, message_id=status_msg.message_id)
+        else:
+            error_msg = stderr.decode() if stderr else "Unbekannter Fehler"
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=status_msg.message_id,
+                text=f"❌ *Screenshot fehlgeschlagen:* {error_msg}",
+                parse_mode='Markdown'
+            )
+            
+    except Exception as e:
+        logger.error(f"Watchtower Error: {e}")
+        await context.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=status_msg.message_id,
+            text=f"💥 *Systemfehler (Watchtower):* {str(e)}",
+            parse_mode='Markdown'
+        )
+    finally:
+        # Cleanup
+        if os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+            except:
+                pass
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Rule 2 & 3: Live-Feedback & Async-Safety"""
@@ -129,6 +191,7 @@ def main():
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
     application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('watch', watch))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     
     print("🚀 Starting Telegram Bot (Phase 2) polling...")

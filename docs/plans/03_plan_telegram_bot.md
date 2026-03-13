@@ -20,7 +20,7 @@
 - [ ] **Venture Trigger:** Anbindung der Agenten-Teams (Planner, Collector, Critic) an Telegram.
 - [ ] **Live-Protokoll:** Detailliertere Status-Updates während der Venture-Analyse ("Kritiker prüft gerade...").
 - [ ] **Smarte Synthese:** Automatisches Post-Processing der Qwen-Berichte via Gemini 1.5 Pro API, um Kurzzusammenfassungen zu generieren.
-- [ ] **Visual Feedback:** Der Bot schickt auf Anfrage einen Screenshot vom virtuellen Monitor (:99), damit man sieht, was er gerade "sieht".
+- [x] **Visual Feedback (The Watchtower):** Der Bot schickt auf Anfrage (`/watch`) asynchron einen Screenshot vom virtuellen Monitor (:99) als Bild-Nachricht, damit man sieht, was der Agent gerade "sieht" (inkl. Fix für Headless-Browser).
 
 ---
 

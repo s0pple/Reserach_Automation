@@ -26,9 +26,14 @@ class QwenResearcher:
         
         async with async_playwright() as p:
             # Persistent Context lädt unsere Google-Sitzung
+            # Wir stellen sicher, dass Playwright im Xvfb (:99) gerendert wird
+            env = os.environ.copy()
+            env["DISPLAY"] = self.display
+            
             context = await p.chromium.launch_persistent_context(
                 user_data_dir=self.profile_dir,
                 headless=False,
+                env=env,
                 args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
             )
             page = context.pages[0] if context.pages else await context.new_page()

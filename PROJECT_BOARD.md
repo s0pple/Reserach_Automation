@@ -16,7 +16,8 @@
 
 ### 🕸️ Sprint 2: "The Hunter-Gatherer" (General Web Surfer)
 - **Priority:** High | **Tags:** `[Agent]`, `[Computer-Use]`
-- **Context:** Ein generalisierter Web-Agent, der Aufgaben wie "Günstigstes Proteinpulver CH" löst. Sucht via Google, iteriert über Links, extrahiert Daten, vergleicht sie und geht zurück.
+- **Status:** [2026-03-14] God-Mode Startskript für Linux erstellt (`start_god_mode.sh`).
+- **Next Step:** User muss `infra/docker/docker-compose.yml` Pfade fixen und Berechtigungen anpassen.
 - **Goal:** Dynamische Navigation auf unstrukturierten Seiten (ohne fixe Workflows).
 
 ### 💼 Venture Analyst Telegram-Integration (Phase 3)

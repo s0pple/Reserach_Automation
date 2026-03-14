@@ -36,6 +36,31 @@
 ---
 
 ## 🎯 Backlog / Idea Pool
+### 🔍 "Deep Recon" Workflow (Google Search + Multi-Page)
+- **Priority:** Medium | **Tags:** `[Web-Scraping]`, `[Scale]`
+- **Context:** Google-Suche nach Nische -> CV-Bot scannt erste 3 Seiten & extrahiert URLs -> Playwright besucht URLs im Hintergrund -> Gemini Flash erstellt 1-Satz-Zusammenfassung pro Seite.
+- **Goal:** Ein komplettes Markt-Mapping in 5 Minuten.
+
+### 🛡️ "Cloud-Consensus" Workflow (Multi-LLM)
+- **Priority:** Medium | **Tags:** `[Quality]`, `[Anti-Hallucination]`
+- **Context:** QwenResearcher erstellt Basis-Bericht -> Parallel Senden an Gemini 1.5 Pro & Claude 3.5 Sonnet -> "Skeptic Agent" vergleicht Aussagen. Nur bestätigte Fakten landen im Venture-Memo.
+- **Goal:** 100% faktenbasierte Research-Qualität.
+
+### 🕸️ "Competitor Spy" Workflow (Visual Landing Page Analysis)
+- **Priority:** Medium | **Tags:** `[Vision]`, `[Analysis]`
+- **Context:** CV-Bot macht Screenshots von Wettbewerber-Landing-Pages -> Gemini Vision analysiert Design, Pricing und Value Proposition direkt vom Bild.
+- **Goal:** Wettbewerbsanalyse ohne jemals ein DOM-Element anfassen zu müssen (Umgehung von Bot-Fallen).
+
+### 📱 "Telegram Command Center" (Fullscan Workflow)
+- **Priority:** Medium | **Tags:** `[UI]`, `[Integration]`
+- **Context:** Ein Befehl `/fullscan "PropTech Germany"` triggert: Google Recon -> Qwen Deep Research -> Gemini Synthesis.
+- **Goal:** Nach 10 Minuten eine PDF oder ein detailliertes Markdown direkt ins Telegram geliefert bekommen.
+
+### 🤖 "Self-Improving Router" (Quality Gate)
+- **Priority:** Low | **Tags:** `[Self-Improvement]`, `[Router]`
+- **Context:** Alle Router-Entscheidungen werden geloggt. Einmal am Tag bewertet Gemini 1.5 Pro die Logs und gibt Feedback, wo die Tool-Wahl falsch war.
+- **Goal:** Der lokale Router wird jeden Tag klüger, ohne Code anpassen zu müssen.
+
 ### 🤖 Sprint 3: "The AI Factory" (Auto-Coder Swarm)
 - **Priority:** Medium | **Tags:** `[Self-Improvement]`, `[Orchestration]`
 - **Context:** Der Orchestrator spawnt Gemini CLI Sub-Agents in isolierten V2-Workspaces (`temp/jobs/`), lässt sie neue Tools/Workflows programmieren, jagt diese durch Quality Gates (Pytest) und übernimmt nur sauberen Code in `src/tools/`.

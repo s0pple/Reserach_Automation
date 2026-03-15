@@ -5,6 +5,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 # 1. System-Abhängigkeiten (Dein funktionierendes Setup)
 RUN apt-get update && apt-get install -y \
     xvfb \
+    fluxbox \
+    x11-xserver-utils \
     x11-utils \
     scrot \
     gnome-screenshot \

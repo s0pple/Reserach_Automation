@@ -120,7 +120,9 @@ class BrowserSearchProvider(SearchProvider):
                     args=[
                         "--disable-blink-features=AutomationControlled",
                         "--no-sandbox",
-                        "--disable-setuid-sandbox"
+                        "--disable-setuid-sandbox",
+                        "--start-maximized",
+                        "--window-size=1920,1080"
                     ]
                 )
 

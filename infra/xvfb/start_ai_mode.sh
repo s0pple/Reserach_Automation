@@ -7,6 +7,11 @@ then
     # Fix für den Xauth-Fehler und virtuellen Monitor starten
     touch ~/.Xauthority
     Xvfb :99 -ac -screen 0 1920x1080x24 &
+    sleep 2
+    # Start Window Manager and set background to avoid black screen
+    nohup fluxbox -display :99 > /dev/null 2>&1 &
+    sleep 1
+    nohup xsetroot -display :99 -solid "#2E3440" > /dev/null 2>&1 &
 else
     echo "🖥️ Virtueller Monitor (:99) läuft bereits."
 fi

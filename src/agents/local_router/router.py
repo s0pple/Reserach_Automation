@@ -71,8 +71,10 @@ If no tool matches the user's intent, return:
 
     except Exception as e:
         logger.error(f"Router Error: {e}")
-        # Robust Fallback - In Phase 2 default to qwen_research instead of error
+        # Robust Fallback - If router is offline, fallback to general_agent
         return {
-            "tool": "qwen_research",
-            "message": "Fallback: Router nicht erreichbar, nutze Qwen-Standard."
+            "tool": "general_agent",
+            "parameters": {
+                "goal": user_command
+            }
         }

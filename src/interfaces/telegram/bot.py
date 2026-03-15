@@ -2,15 +2,17 @@ import asyncio
 import os
 import sys
 import logging
-from telegram import Update
+from telegram import Update, InputMediaPhoto
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 # Project Imports
 from src.agents.local_router.router import analyze_intent
 from src.tools.web.qwen_researcher import register as register_qwen, qwen_research_tool
+from src.tools.general.agent_tool import register as register_general, general_agent_tool
 
 # Register all tools once
 register_qwen()
+register_general()
 
 # Configure basic logging
 logging.basicConfig(
@@ -176,12 +178,123 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await context.bot.send_message(chat_id=chat_id, text=f"❌ *Fehler im Researcher:* {result.get('error')}", parse_mode='Markdown')
                 
+        elif tool_name == "general_agent":
+            goal = params.get("goal", user_query)
+
+            # Heartbeat specific for general agent
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=status_msg.message_id,
+                text=f"🧠 *General Agent übernimmt:* `{goal}`\n⚙️ Initiiere ReAct-Loop (Planning)...",
+                parse_mode='Markdown'
+            )
+
+            async def status_updater(msg_text: str):
+                try:
+                    await context.bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=status_msg.message_id,
+                        text=f"🧠 *General Agent (Live-Status):*\n{msg_text}",
+                        parse_mode='Markdown'
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to update telegram message: {e}")
+
+            result = await general_agent_tool(goal=goal, telegram_callback=status_updater)
+
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=status_msg.message_id,
+                text=result.get("content"),
+                parse_mode='Markdown'
+            )
         else:
             await context.bot.send_message(chat_id=chat_id, text=f"🛠️ Das Tool `{tool_name}` ist in Phase 2 noch in Vorbereitung.", parse_mode='Markdown')
 
     except Exception as e:
         logger.error(f"Telegram Bot Error: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"💥 *Systemfehler:* {str(e)}")
+
+active_streams = {}
+
+async def stop_live(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Stops an active live stream."""
+    if not await is_authorized(update):
+        return
+    chat_id = update.effective_chat.id
+    if chat_id in active_streams:
+        active_streams[chat_id] = False
+        await context.bot.send_message(chat_id=chat_id, text="🛑 *Live-Stream gestoppt.*", parse_mode='Markdown')
+    else:
+        await context.bot.send_message(chat_id=chat_id, text="Es läuft aktuell kein Stream.", parse_mode='Markdown')
+
+async def live(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Starts a stop-motion live stream from Xvfb."""
+    if not await is_authorized(update):
+        return
+    
+    chat_id = update.effective_chat.id
+    if active_streams.get(chat_id):
+        await context.bot.send_message(chat_id=chat_id, text="⚠️ Es läuft bereits ein Stream. Nutze /stop zum Beenden.")
+        return
+        
+    active_streams[chat_id] = True
+    status_msg = await context.bot.send_message(chat_id=chat_id, text="🎥 *Starte Live-Stream...* (Nutze /stop zum Beenden)", parse_mode='Markdown')
+    
+    async def _stream_loop():
+        stream_msg = None
+        filepath = f"temp/live_{chat_id}.png"
+        os.makedirs("temp", exist_ok=True)
+        
+        env = os.environ.copy()
+        env["DISPLAY"] = ":99"
+        
+        try:
+            while active_streams.get(chat_id):
+                # Take screenshot
+                process = await asyncio.create_subprocess_exec(
+                    'scrot', filepath,
+                    env=env,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                await process.communicate()
+                
+                if process.returncode == 0 and os.path.exists(filepath):
+                    try:
+                        with open(filepath, 'rb') as photo:
+                            if not stream_msg:
+                                # Send initial photo
+                                stream_msg = await context.bot.send_photo(
+                                    chat_id=chat_id,
+                                    photo=photo,
+                                    caption="🔴 *LIVE* - God Container"
+                                )
+                            else:
+                                # Update existing photo
+                                await context.bot.edit_message_media(
+                                    chat_id=chat_id,
+                                    message_id=stream_msg.message_id,
+                                    media=InputMediaPhoto(media=photo, caption="🔴 *LIVE* - God Container")
+                                )
+                    except Exception as stream_err:
+                        # Ignore 'Message is not modified' error if the screen hasn't changed
+                        if "Message is not modified" not in str(stream_err):
+                            logger.error(f"Live Stream update error: {stream_err}")
+                
+                await asyncio.sleep(3) # Wait 3 seconds before next frame
+                
+        except Exception as e:
+            logger.error(f"Live Stream Error: {e}")
+        finally:
+            active_streams[chat_id] = False
+            if os.path.exists(filepath):
+                try: os.remove(filepath)
+                except: pass
+
+    # Run stream loop in the background so it doesn't block other messages!
+    asyncio.create_task(_stream_loop())
+
 
 def main():
     if not TELEGRAM_TOKEN:
@@ -192,6 +305,8 @@ def main():
     
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('watch', watch))
+    application.add_handler(CommandHandler('live', live))
+    application.add_handler(CommandHandler('stop', stop_live))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     
     print("🚀 Starting Telegram Bot (Phase 2) polling...")

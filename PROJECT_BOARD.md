@@ -14,11 +14,11 @@
 
 ## 🚀 In Progress (Der nächste große Wurf)
 
-### 🕸️ Sprint 2: "The Hunter-Gatherer" (General Web Surfer)
-- **Priority:** High | **Tags:** `[Agent]`, `[Computer-Use]`
-- **Status:** [2026-03-14] God-Mode Startskript für Linux erstellt (`start_god_mode.sh`).
-- **Next Step:** User muss `infra/docker/docker-compose.yml` Pfade fixen und Berechtigungen anpassen.
-- **Goal:** Dynamische Navigation auf unstrukturierten Seiten (ohne fixe Workflows).
+### 🕸️ Sprint 2: "The Universal Hunter-Gatherer" (General Agent)
+- **Priority:** High | **Tags:** `[Agent]`, `[Computer-Use]`, `[Planning]`
+- **Status:** [2026-03-14] **Phase 1-3 implemented.** Planner (Gemini API) and Executor (Playwright + CVBot Fallback) are integrated. Intent routing in Telegram is active.
+- **Next Step:** Fix concurrency issue (Live Stream blocks/is blocked by Agent execution). Improve Vision reliability for unstructured sites (Migros Test). Implement persistent browser sessions for the General Agent.
+- **Goal:** Dynamische Navigation auf unstrukturierten Seiten (z.B. Migros-Bananen-Test). Nutzt hybride Strategien (DOM vs. Vision) und "Zero-Cost Reasoning".
 
 ### 💼 Venture Analyst Telegram-Integration (Phase 3)
 - **Priority:** Medium | **Tags:** `[Venture]`, `[UI]`

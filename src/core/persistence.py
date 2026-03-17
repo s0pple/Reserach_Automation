@@ -1,13 +1,80 @@
 import json
 import os
+import sqlite3
 from dataclasses import asdict, is_dataclass
 from enum import Enum
 from datetime import datetime
-from typing import Any
+from typing import Any, List, Optional, Dict
 
 from src.schema.research_state import ResearchState
 from src.schema.research_node import ResearchNode, NodeType, NodeStatus, EvidenceEntry, ConfidenceFactors
 from src.schema.source import SourceMetadata
+
+class JobStatus(str, Enum):
+    PENDING = "PENDING"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    KILLED = "KILLED"
+
+class JobRegistry:
+    """
+    Manages background jobs in a SQLite database for Phalanx 2.0.
+    """
+    def __init__(self, db_path: str = "data/jobs.sqlite"):
+        # Resolve absolute path to avoid issues with different working directories
+        self.db_path = os.path.abspath(db_path)
+        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        self._init_db()
+
+    def _init_db(self):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS jobs (
+                    job_id TEXT PRIMARY KEY,
+                    topic TEXT,
+                    status TEXT,
+                    display TEXT,
+                    pid INTEGER,
+                    start_time TEXT,
+                    end_time TEXT,
+                    log_path TEXT,
+                    error_msg TEXT
+                )
+            """)
+            conn.commit()
+
+    def register_job(self, job_id: str, topic: str, display: str, log_path: str):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO jobs (job_id, topic, status, display, start_time, log_path) VALUES (?, ?, ?, ?, ?, ?)",
+                (job_id, topic, JobStatus.PENDING.value, display, datetime.now().isoformat(), log_path)
+            )
+
+    def update_job(self, job_id: str, **kwargs):
+        if not kwargs:
+            return
+        fields = ", ".join([f"{k} = ?" for k in kwargs.keys()])
+        values = list(kwargs.values()) + [job_id]
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(f"UPDATE jobs SET {fields} WHERE job_id = ?", values)
+
+    def get_job(self, job_id: str) -> Optional[Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute("SELECT * FROM jobs WHERE job_id = ?", (job_id,)).fetchone()
+            return dict(row) if row else None
+
+    def get_active_jobs(self) -> List[Dict]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM jobs WHERE status IN (?, ?)", 
+                             (JobStatus.PENDING.value, JobStatus.RUNNING.value)).fetchall()
+            return [dict(r) for r in rows]
+
+    def cleanup_old_jobs(self, hours: int = 24):
+        # Placeholder for future cleanup logic
+        pass
 
 class ResearchEncoder(json.JSONEncoder):
     """Custom JSON encoder for ResearchState objects."""

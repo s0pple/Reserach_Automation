@@ -12,13 +12,26 @@
 
 ---
 
-## 🚀 In Progress (Der nächste große Wurf)
+## 🚀 Roadmap (Vision 2026)
 
-### 🕸️ Sprint 2: "The Universal Hunter-Gatherer" (General Agent)
-- **Priority:** High | **Tags:** `[Agent]`, `[Computer-Use]`, `[Planning]`
-- **Status:** [2026-03-14] **Phase 1-3 implemented.** Planner (Gemini API) and Executor (Playwright + CVBot Fallback) are integrated. Intent routing in Telegram is active.
-- **Next Step:** Fix concurrency issue (Live Stream blocks/is blocked by Agent execution). Improve Vision reliability for unstructured sites (Migros Test). Implement persistent browser sessions for the General Agent.
-- **Goal:** Dynamische Navigation auf unstrukturierten Seiten (z.B. Migros-Bananen-Test). Nutzt hybride Strategien (DOM vs. Vision) und "Zero-Cost Reasoning".
+- ### 🛠️ Sprint 3: "Phalanx 3.0 - The Self-Evolving Agent OS"
+- **Priority:** Critical | **Tags:** `[Architecture]`, `[Self-Learning]`, `[Discovery]`
+- **Status:** [2026-03-15] **Initialer Masterplan (Plan 11) erstellt.**
+- **Key Features:** 
+  - **UI Discovery Engine:** Autonomes Mapping von Web-Interfaces (z.B. Gemini, LinkedIn).
+  - **The Forge (Tool Generator):** Automatisches Erstellen und Speichern von Playwright/CV-Workflows.
+  - **Meta-Router:** Intelligentes Switchen zwischen "Tool nutzen" und "Tool bauen".
+- **Goal:** Unbegrenzte Skalierbarkeit über jede Webseite ohne manuelles Hardcoding.
+
+- ### 🕸️ Sprint 2: "The Universal Hunter-Gatherer" (General Agent & Phalanx 2.0)
+- **Priority:** High | **Tags:** `[Agent]`, `[Infra]`, `[Scaling]`
+- **Status:** [2026-03-15] **Phalanx 2.0 ONLINE & ALWAYS-ON.**
+  - [x] JobRegistry (SQLite) implementiert.
+  - [x] JobLauncher (Display-Hunting, Profile-Shadowing) fertig.
+  - [x] Telegram Bot V2 (Universal Intelligence) aktiv.
+  - [x] **Phalanx Daemon (Watchdog):** Automatischer Restart-Mechanismus für 24/7 Betrieb etabliert.
+- **Next Step:** Fix `/watch` (Screenshot) reliability issues. Optimize LLM routing for multi-tasking. Implement UI Explorer for Gemini/Migros.
+- **Goal:** Parallele, isolierte Research-Jobs direkt über Telegram steuern mit 100% Uptime.
 
 ### 💼 Venture Analyst Telegram-Integration (Phase 3)
 - **Priority:** Medium | **Tags:** `[Venture]`, `[UI]`

@@ -1,6 +1,6 @@
-#!/bin/bash
+﻿#!/bin/bash
 # Check if Xvfb is already running to avoid lock errors
-if ! pgrep -x "Xvfb" > /dev/null
+if ! pgrep -x ""Xvfb"" > /dev/null
 then
     echo "🖥️ Starte virtuellen Monitor (:99)..."
     rm -f /tmp/.X99-lock
@@ -35,5 +35,21 @@ if [ ! -d "node_modules" ] || [ ! -d "packages/cli/dist" ]; then
     npm run build
 fi
 
-# Starte das CLI direkt aus dem Source-Code
-npm start -- "$@"
+# Starte das CLI über das neue Bundle aus dem Arbeitsverzeichnis heraus
+cd /app
+
+# 1. Klicke in den Terminal und frage nach Sandbox
+echo ""
+echo "🛡️ Sandbox-Modus aktivieren? (Wir sind bereits in Docker, dies ändert nur das UI-Verhalten)"
+read -p "   [y] Ja | [n] Nein (Standard): " use_sandbox
+
+if [[ "$use_sandbox" == "y" ]] || [[ "$use_sandbox" == "Y" ]]; then
+    export SANDBOX="docker"
+    echo "✅ Sandbox-Umgebung (Docker) wird der CLI signalisiert."
+else
+    echo "❌ Keine Sandbox signalisiert."
+fi
+
+echo ""
+# Starte das CLI 
+node /gemini-cli-custom/bundle/gemini.js "$@"

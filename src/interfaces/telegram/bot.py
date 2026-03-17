@@ -2,24 +2,33 @@ import asyncio
 import os
 import sys
 import logging
-from telegram import Update, InputMediaPhoto
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+import time
+import subprocess
+import html
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes, CommandHandler
 
-# Project Imports
+# Core/Registry
+from src.core.registry import ToolRegistry
+from src.schema.tool_parameters import ResearchParams, CLIParams, ProjectParams, WatchParams, GeneralAgentParams, SessionParams
+
+# Tools
+from src.core.persistence import JobRegistry
 from src.agents.local_router.router import analyze_intent
-from src.tools.web.qwen_researcher import register as register_qwen, qwen_research_tool
-from src.tools.general.agent_tool import register as register_general, general_agent_tool
-
-# Register all tools once
-register_qwen()
-register_general()
+from src.tools.general.cli_tool import run_cli_command
+from src.tools.general.project_tool import get_project_status
+from src.tools.general.agent_tool import general_agent_tool
+from src.tools.general.session_tool import interactive_session_tool
+from src.tools.web.ai_studio_tool import ai_studio_controller, AIStudioParams
+from src.tools.dev.developer_tool import developer_reasoning_tool, DeveloperArguments
+from src.tools.web.gemini_web_nav_tool import gemini_web_nav_tool, WebNavArguments
 
 # Configure basic logging
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("PhalanxBot")
 
 # Load Environment Variables
 try:
@@ -33,284 +42,179 @@ ALLOWED_IDS_STR = os.getenv("ALLOWED_TELEGRAM_USER_IDS", "")
 ALLOWED_IDS = [int(id_str.strip()) for id_str in ALLOWED_IDS_STR.split(",") if id_str.strip().isdigit()]
 
 async def is_authorized(update: Update) -> bool:
-    """Rule 1: Whitelist Security Check"""
-    if not update.effective_user:
-        return False
-    user_id = update.effective_user.id
-    if user_id not in ALLOWED_IDS:
-        logger.warning(f"🔒 Unauthorized access attempt from user ID: {user_id}")
+    if not update.effective_user: return False
+    if update.effective_user.id not in ALLOWED_IDS:
+        logger.warning(f"🔒 Unauthorized access attempt: {update.effective_user.id}")
         return False
     return True
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for the /start command."""
-    if not await is_authorized(update):
-        return
-    welcome_text = (
-        "🚀 *Orchestrator Bot Online! (Phase 2)*\n\n"
-        "Ich bin deine Fernsteuerung für den God-Container.\n"
-        "Schicke mir einfach ein Thema, z.B.:\n"
-        "`Zukunft der Solarenergie 2030`"
-    )
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=welcome_text, parse_mode='Markdown')
-
-import time
-
-async def watch(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Rule 1 & 2: Asynchroner Watchtower (Live-Screenshot)"""
-    if not await is_authorized(update):
-        return
-        
-    chat_id = update.effective_chat.id
-    status_msg = await context.bot.send_message(chat_id=chat_id, text="📸 *Hole Live-Bild vom God-Container (:99)...*", parse_mode='Markdown')
+# --- Helper: Safe Markdown ---
+def safe_markdown(text: str) -> str:
+    """Escapes markdown but allows code blocks if they are well-formed (simple check)."""
+    # For simplicity in this bot, we often just want raw text or simple code blocks.
+    # If the text contains incomplete markdown entities, Telegram explodes.
+    # Strategy: If it looks like code, keep it, otherwise escape critical chars if needed.
+    # Actually, the safest bet for unpredictable output is to NOT use Markdown for the bulk, 
+    # OR wrap everything in a code block if it looks technical.
     
-    timestamp = int(time.time())
-    filepath = f"temp/watchtower_{timestamp}.png"
+    if "```" in text or "`" in text:
+        # It already tries to be markdown. Let's hope it's valid.
+        return text
     
-    try:
-        os.makedirs("temp", exist_ok=True)
-        
-        # Asynchroner Screenshot via scrot (non-blocking)
-        env = os.environ.copy()
-        env["DISPLAY"] = ":99"
-        
-        process = await asyncio.create_subprocess_exec(
-            'scrot', filepath,
-            env=env,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-        stdout, stderr = await process.communicate()
-        
-        if process.returncode == 0 and os.path.exists(filepath):
-            with open(filepath, 'rb') as photo:
-                await context.bot.send_photo(
-                    chat_id=chat_id,
-                    photo=photo,
-                    caption="👁️ *The Watchtower:* Live-Ansicht aus dem Xvfb-Monitor.",
-                    parse_mode='Markdown'
-                )
-            await context.bot.delete_message(chat_id=chat_id, message_id=status_msg.message_id)
-        else:
-            error_msg = stderr.decode() if stderr else "Unbekannter Fehler"
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=status_msg.message_id,
-                text=f"❌ *Screenshot fehlgeschlagen:* {error_msg}",
-                parse_mode='Markdown'
-            )
-            
-    except Exception as e:
-        logger.error(f"Watchtower Error: {e}")
-        await context.bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=status_msg.message_id,
-            text=f"💥 *Systemfehler (Watchtower):* {str(e)}",
-            parse_mode='Markdown'
-        )
-    finally:
-        # Cleanup
-        if os.path.exists(filepath):
-            try:
-                os.remove(filepath)
-            except:
-                pass
+    # Escape special chars for Markdown V1/V2 if we were being strict,
+    # but here we just return text. The error usually comes from unclosed entities.
+    return text
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Rule 2 & 3: Live-Feedback & Async-Safety"""
-    if not await is_authorized(update):
-        return
+# --- Tool Callbacks ---
+async def trigger_job(topic: str):
+    registry = JobRegistry()
+    job_id = f"job_{int(time.time())}"
+    log_path = os.path.abspath(f"temp/jobs/{job_id}/output.log")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    registry.register_job(job_id, topic, "PENDING", log_path)
+    subprocess.Popen([sys.executable, "src/core/job_launcher.py", job_id, topic], start_new_session=True)
+    return {"content": f"🚀 Forschungs-Mission `{job_id}` für _{topic}_ gestartet."}
+
+async def take_watch(job_id=None):
+    display = ":99"
+    if job_id:
+        job = JobRegistry().get_job(job_id)
+        if job and job.get("display"): display = job["display"]
     
+    filepath = f"temp/watch_{int(time.time())}.png"
+    os.makedirs("temp", exist_ok=True)
+    env = os.environ.copy(); env["DISPLAY"] = display
+    
+    process = await asyncio.create_subprocess_exec("scrot", "-z", filepath, env=env)
+    await process.communicate()
+    
+    if os.path.exists(filepath):
+        return {"photo_path": filepath, "caption": f"👁️ Display `{display}`"}
+    else:
+        return {"content": f"❌ Screenshot von {display} fehlgeschlagen."}
+
+
+# --- The Universal Handler ---
+async def handle_universal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_authorized(update): return
     user_query = update.message.text
-    chat_id = update.effective_chat.id
+    if not user_query: return
     
-    # Send Heartbeat 1
-    status_msg = await context.bot.send_message(chat_id=chat_id, text="🧠 *Router analysiert Intent...*", parse_mode='Markdown')
-    
+    # 1. Quick Overrides (Bypass LLM for clear commands)
+    q_low = user_query.lower()
+    if q_low == "/status" or q_low == "status":
+        registry = JobRegistry()
+        jobs = registry.get_active_jobs()
+        if not jobs: await update.message.reply_text("📭 Keine aktiven Jobs.")
+        else: await update.message.reply_text("📋 *Aktive Jobs:*\n\n" + "\n".join([f"🆔 `{j['job_id']}` | 🖥️ `{j.get('display') or '...'}` | 🔹 `{j['status']}`" for j in jobs]), parse_mode="Markdown")
+        return
+
+    # 2. LLM Intent Analysis
+    status_msg = await update.message.reply_text("🧠 *Höre zu...*", parse_mode="Markdown")
     try:
-        # 1. Router fragt lokales Modell (Qwen2.5)
         intent = await analyze_intent(user_query)
-        tool_name = intent.get("tool", "qwen_research")
-        params = intent.get("parameters", {"topic": user_query})
+        tool_name = intent.get("tool", "error")
+        thought = intent.get("thought", "Thinking...")
+        params = intent.get("parameters", {})
         
-        logger.info(f"Router decided: {tool_name} with params: {params}")
+        logger.info(f"LLM Intent: {tool_name} with params: {params}")
         
-        # Send Heartbeat 2
+        # Display Reasoning
         await context.bot.edit_message_text(
-            chat_id=chat_id, 
+            chat_id=update.effective_chat.id, 
             message_id=status_msg.message_id, 
-            text=f"✅ *Intent erkannt:* `{tool_name}`\n🔍 Starte Recherche zu: _{params.get('topic', user_query)}_...", 
-            parse_mode='Markdown'
+            text=f"🤔 Reasoning:\n{thought}\n\n🛠️ Tool: {tool_name}"
+            # No parse_mode used here to be safe
         )
+
+
+        # Provide a general async callback for tools that need to push updates
+        async def telegram_callback(msg_text):
+            try:
+                # Use HTML parse mode for safer rendering of random text than Markdown
+                # OR just plain text if unsure.
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=msg_text) 
+            except Exception as e:
+                logger.error(f"Callback send error: {e}")
+
+        # Inject callback into params if the tool supports it
+        if tool_name in ["general_agent", "interactive_session_tool", "web_nav_tool", "developer_tool", "ai_studio_tool"]:
+            params["telegram_callback"] = telegram_callback
+
+        # --- DYNAMIC ROUTING ---
+        tool_info = ToolRegistry.get_tool(tool_name)
         
-        # 2. Tool Execution (Rule 3: Async & Non-Blocking)
-        if tool_name == "qwen_research":
-            # Extract topic from params
-            topic = params.get("topic", user_query)
-            
-            # Execute tool directly via registered function or tool wrapper
-            result = await qwen_research_tool(topic=topic, wait_minutes=2)
-            
-            if result.get("success"):
-                report_content = result.get("content", "")
-                report_len = result.get("length", 0)
-                
-                # Send Heartbeat 3
-                await context.bot.edit_message_text(
-                    chat_id=chat_id, 
-                    message_id=status_msg.message_id, 
-                    text=f"🎉 *Research abgeschlossen!* ({report_len} Zeichen)\n📦 Bereite Dokument vor...", 
-                    parse_mode='Markdown'
-                )
-                
-                # Save to temp file and send
-                temp_file = f"temp/telegram_report_{chat_id}.md"
-                os.makedirs("temp", exist_ok=True)
-                with open(temp_file, "w", encoding="utf-8") as f:
-                    f.write(report_content)
-                
-                await context.bot.send_document(
-                    chat_id=chat_id, 
-                    document=open(temp_file, 'rb'), 
-                    filename=f"Research_{topic.replace(' ', '_')[:20]}.md",
-                    caption=f"Hier ist dein Deep Research Bericht zu: {topic}"
-                )
-            else:
-                await context.bot.send_message(chat_id=chat_id, text=f"❌ *Fehler im Researcher:* {result.get('error')}", parse_mode='Markdown')
-                
-        elif tool_name == "general_agent":
-            goal = params.get("goal", user_query)
-
-            # Heartbeat specific for general agent
+        if not tool_info:
             await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=status_msg.message_id,
-                text=f"🧠 *General Agent übernimmt:* `{goal}`\n⚙️ Initiiere ReAct-Loop (Planning)...",
-                parse_mode='Markdown'
+                chat_id=update.effective_chat.id, 
+                message_id=status_msg.message_id, 
+                text=f"❌ Fehler: Router hat ein unbekanntes Tool gewählt `{tool_name}`"
             )
+            return
 
-            async def status_updater(msg_text: str):
+        # Execute the tool
+        result = await tool_info.func(**params)
+        
+        # Handle Output
+        if result:
+            # Special handling for Watch tool which returns a photo path
+            if "photo_path" in result:
+                await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=status_msg.message_id)
+                with open(result["photo_path"], "rb") as photo:
+                    await context.bot.send_photo(chat_id=update.effective_chat.id, photo=photo, caption=result.get("caption", ""))
+                os.remove(result["photo_path"])
+            else:
+                # Standard text output
+                output_text = result.get("content") or result.get("message") or result.get("stdout") or result.get("error") or str(result)
+                
+                # Sanitize output slightly to prevent markdown errors if we keep parse_mode
+                # Better strategy: Try Markdown, fallback to Text if it fails
                 try:
                     await context.bot.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=status_msg.message_id,
-                        text=f"🧠 *General Agent (Live-Status):*\n{msg_text}",
-                        parse_mode='Markdown'
+                        chat_id=update.effective_chat.id, 
+                        message_id=status_msg.message_id, 
+                        text=f"✅ Ergebnis:\n{output_text[:3500]}"
+                        # No parse mode
                     )
-                except Exception as e:
-                    logger.warning(f"Failed to update telegram message: {e}")
-
-            result = await general_agent_tool(goal=goal, telegram_callback=status_updater)
-
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=status_msg.message_id,
-                text=result.get("content"),
-                parse_mode='Markdown'
-            )
-        else:
-            await context.bot.send_message(chat_id=chat_id, text=f"🛠️ Das Tool `{tool_name}` ist in Phase 2 noch in Vorbereitung.", parse_mode='Markdown')
+                except Exception as md_error:
+                    logger.warning(f"Markdown failed, falling back to plain text: {md_error}")
+                    await context.bot.edit_message_text(
+                        chat_id=update.effective_chat.id, 
+                        message_id=status_msg.message_id, 
+                        text=f"✅ Ergebnis:\n{output_text[:3500]}"
+                        # No parse mode
+                    )
 
     except Exception as e:
-        logger.error(f"Telegram Bot Error: {e}")
-        await context.bot.send_message(chat_id=chat_id, text=f"💥 *Systemfehler:* {str(e)}")
-
-active_streams = {}
-
-async def stop_live(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Stops an active live stream."""
-    if not await is_authorized(update):
-        return
-    chat_id = update.effective_chat.id
-    if chat_id in active_streams:
-        active_streams[chat_id] = False
-        await context.bot.send_message(chat_id=chat_id, text="🛑 *Live-Stream gestoppt.*", parse_mode='Markdown')
-    else:
-        await context.bot.send_message(chat_id=chat_id, text="Es läuft aktuell kein Stream.", parse_mode='Markdown')
-
-async def live(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Starts a stop-motion live stream from Xvfb."""
-    if not await is_authorized(update):
-        return
-    
-    chat_id = update.effective_chat.id
-    if active_streams.get(chat_id):
-        await context.bot.send_message(chat_id=chat_id, text="⚠️ Es läuft bereits ein Stream. Nutze /stop zum Beenden.")
-        return
-        
-    active_streams[chat_id] = True
-    status_msg = await context.bot.send_message(chat_id=chat_id, text="🎥 *Starte Live-Stream...* (Nutze /stop zum Beenden)", parse_mode='Markdown')
-    
-    async def _stream_loop():
-        stream_msg = None
-        filepath = f"temp/live_{chat_id}.png"
-        os.makedirs("temp", exist_ok=True)
-        
-        env = os.environ.copy()
-        env["DISPLAY"] = ":99"
-        
+        logger.error(f"Universal Handler Error: {e}")
+        # Fallback error message
         try:
-            while active_streams.get(chat_id):
-                # Take screenshot
-                process = await asyncio.create_subprocess_exec(
-                    'scrot', filepath,
-                    env=env,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
-                await process.communicate()
-                
-                if process.returncode == 0 and os.path.exists(filepath):
-                    try:
-                        with open(filepath, 'rb') as photo:
-                            if not stream_msg:
-                                # Send initial photo
-                                stream_msg = await context.bot.send_photo(
-                                    chat_id=chat_id,
-                                    photo=photo,
-                                    caption="🔴 *LIVE* - God Container"
-                                )
-                            else:
-                                # Update existing photo
-                                await context.bot.edit_message_media(
-                                    chat_id=chat_id,
-                                    message_id=stream_msg.message_id,
-                                    media=InputMediaPhoto(media=photo, caption="🔴 *LIVE* - God Container")
-                                )
-                    except Exception as stream_err:
-                        # Ignore 'Message is not modified' error if the screen hasn't changed
-                        if "Message is not modified" not in str(stream_err):
-                            logger.error(f"Live Stream update error: {stream_err}")
-                
-                await asyncio.sleep(3) # Wait 3 seconds before next frame
-                
-        except Exception as e:
-            logger.error(f"Live Stream Error: {e}")
-        finally:
-            active_streams[chat_id] = False
-            if os.path.exists(filepath):
-                try: os.remove(filepath)
-                except: pass
-
-    # Run stream loop in the background so it doesn't block other messages!
-    asyncio.create_task(_stream_loop())
-
+             await context.bot.edit_message_text(chat_id=update.effective_chat.id, message_id=status_msg.message_id, text=f"💥 Fehler: {e}")
+        except:
+             # If edit fails (e.g. message deleted), send new
+             await context.bot.send_message(chat_id=update.effective_chat.id, text=f"💥 Fehler: {e}")
 
 def main():
-    if not TELEGRAM_TOKEN:
-        print("❌ CRITICAL ERROR: TELEGRAM_BOT_TOKEN is not set.")
-        sys.exit(1)
-        
+    # Tool Registration (Critical for LLM Router!)
+    ToolRegistry.register_tool("general_agent", "Autonomous web agent.", general_agent_tool, GeneralAgentParams)
+    ToolRegistry.register_tool("project_status_tool", "Reads local project board and to-dos.", get_project_status, ProjectParams)
+    ToolRegistry.register_tool("cli_tool", "Executes short shell commands.", run_cli_command, CLIParams)
+    ToolRegistry.register_tool("watch_tool", "Takes a screenshot of display.", take_watch, WatchParams)
+    ToolRegistry.register_tool("ai_studio_tool", "Controls Google AI Studio via headless browser.", ai_studio_controller, AIStudioParams)
+    ToolRegistry.register_tool("developer_tool", "Reasoning agent that explores the repository and answers complex technical questions.", developer_reasoning_tool, DeveloperArguments)
+    ToolRegistry.register_tool("web_nav_tool", "Autonomous web agent powered by Gemini Vision. Use for tasks like 'Buy X', 'Check price of Y'.", gemini_web_nav_tool, WebNavArguments)
+    ToolRegistry.register_tool("deep_research", "Start a background research job.", trigger_job, ResearchParams)
+    ToolRegistry.register_tool("interactive_session_tool", "Starts, sends input to, or kills a persistent, interactive CLI session (like running gemini-cli, npm init, etc). Use action=start with a command to begin. Use action=input with session_id and input_text to reply to a running session.", interactive_session_tool, SessionParams)
+
+    if not TELEGRAM_TOKEN: sys.exit(1)
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
-    application.add_handler(CommandHandler('start', start))
-    application.add_handler(CommandHandler('watch', watch))
-    application.add_handler(CommandHandler('live', live))
-    application.add_handler(CommandHandler('stop', stop_live))
-    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+    application.add_handler(CommandHandler("start", lambda u, c: u.message.reply_text("🚀 Phalanx 3.0 Universal Intelligence Ready.")))
+    application.add_handler(CommandHandler("status", lambda u, c: u.message.reply_text("Nutze Status im Chat oder /cli ps aux.")))
+    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_universal))
     
-    print("🚀 Starting Telegram Bot (Phase 2) polling...")
-    application.run_polling()
+    print("🚀 Phalanx 3.0 Universal Intelligence (OpenClaw Architecture) Online...")
+    application.run_polling(drop_pending_updates=True)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -100,19 +100,34 @@ async def ai_studio_controller(instruction: str, session_id: str = "live_aistudi
              return {"error": f"Konnte Befehl nicht verstehen: '{instruction}'. Nutze: 'Neuer Chat', 'Modell [Name]', 'Schreibe [Text]'."}
 
     # 3. Execute Command via Tmux Input
-    logger.info(f"Sending command to AI Studio: {script_command}")
+    # We simplify: If it's a known keyword, use it. Else, treat as 'prompt'.
+    
+    final_cmd = ""
+    if any(k in cmd_lower for k in ["new", "neu", "chat", "reset"]):
+        final_cmd = "new"
+    elif any(k in cmd_lower for k in ["exit", "stop", "quit"]):
+        final_cmd = "exit"
+    elif any(k in cmd_lower for k in ["screenshot", "bild", "zeig"]):
+        final_cmd = "screenshot"
+    elif any(k in cmd_lower for k in ["finde", "wo ist", "analysiere", "schau dir an", "reflection", "reflect"]):
+        # This triggers the Visual Reflection loop (Screenshot -> Upload -> Question)
+        final_cmd = f"reflect {instruction}"
+    else:
+        # Treat everything else as a prompt
+        if cmd_lower.startswith("prompt ") or cmd_lower.startswith("type "):
+            final_cmd = instruction
+        else:
+            final_cmd = f"prompt {instruction}"
+            
+    logger.info(f"Sending command to AI Studio: {final_cmd}")
     
     # Send the command
     await tmux_manager.execute({
         "action": "input",
         "session_id": session_id,
-        "input_text": script_command + "\n"
+        "input_text": final_cmd + "\n"
     })
     
-    # 4. Wait a bit for the script to react and screenshot to be saved?
-    # The script automatically sends a screenshot via Telegram.
-    # We just return success here.
-    
     return {
-        "content": f"✅ Befehl gesendet: `{script_command}`\n(Screenshot folgt...)"
+        "content": f"✅ Anweisung gesendet: `{final_cmd}`\n(Warte auf visuelle Antwort im Chat...)"
     }

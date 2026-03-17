@@ -94,6 +94,72 @@ async def take_watch(job_id=None):
         return {"content": f"❌ Screenshot von {display} fehlgeschlagen."}
 
 
+# --- Command Handlers ---
+async def cmd_cli(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_authorized(update): return
+    args = context.args
+    if not args:
+        await update.message.reply_text("💡 **Nutzung:** `/cli [Befehl]`\nBeispiel: `/cli ls -la` oder `/cli gemini-cli \"How to fix X?\"`", parse_mode="Markdown")
+        return
+    
+    command = " ".join(args)
+    status_msg = await update.message.reply_text(f"⏳ Starte: `{command}`...", parse_mode="Markdown")
+    
+    # Use interactive_session_tool to start a new tmux session
+    async def callback(text):
+        try:
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=text, parse_mode="Markdown")
+        except:
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=text)
+
+    result = await interactive_session_tool(action="start", command=command, telegram_callback=callback)
+    
+    await context.bot.edit_message_text(
+        chat_id=update.effective_chat.id,
+        message_id=status_msg.message_id,
+        text=result.get("message", "Error") + (f"\n🆔 ID: `{result.get('session_id')}`" if "session_id" in result else ""),
+        parse_mode="Markdown"
+    )
+
+async def cmd_sessions(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await is_authorized(update): return
+    result = await interactive_session_tool(action="list")
+    await update.message.reply_text(result.get("content", "Keine Info."), parse_mode="Markdown")
+
+async def cmd_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/in [session_id] [text] - Send input to a session."""
+    if not await is_authorized(update): return
+    args = context.args
+    if len(args) < 2:
+        await update.message.reply_text("💡 **Nutzung:** `/in [ID] [Text]`\nBeispiel: `/in cli_abc y`", parse_mode="Markdown")
+        return
+    
+    session_id = args[0]
+    input_text = " ".join(args[1:])
+    result = await interactive_session_tool(action="input", session_id=session_id, input_text=input_text)
+    await update.message.reply_text(result.get("message", "Error"), parse_mode="Markdown")
+
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    help_text = """
+🚀 **Phalanx 3.0 Command Center**
+
+**Direkte Befehle:**
+/cli `[Befehl]` - Startet interaktive Session
+/in `[ID] [Input]` - Sendet Text an Session
+/sessions - Listet alle aktiven Sessions
+/status - Zeigt Hintergrund-Forschungs-Jobs
+/watch - Macht Screenshot vom Haupt-Display
+
+**Natürliche Sprache:**
+Schreibe einfach was du willst, der Router wählt das beste Tool.
+- "Recherche zum Thema KI in der Logistik"
+- "Was ist der Status vom Projekt?"
+- "Öffne AI Studio und schreibe einen Blogpost"
+- "Finde den Button 'Accept' im AI Studio"
+"""
+    await update.message.reply_text(help_text, parse_mode="Markdown")
+
+
 # --- The Universal Handler ---
 async def handle_universal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_authorized(update): return
@@ -210,7 +276,11 @@ def main():
     application = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     
     application.add_handler(CommandHandler("start", lambda u, c: u.message.reply_text("🚀 Phalanx 3.0 Universal Intelligence Ready.")))
-    application.add_handler(CommandHandler("status", lambda u, c: u.message.reply_text("Nutze Status im Chat oder /cli ps aux.")))
+    application.add_handler(CommandHandler("help", cmd_help))
+    application.add_handler(CommandHandler("cli", cmd_cli))
+    application.add_handler(CommandHandler("sessions", cmd_sessions))
+    application.add_handler(CommandHandler("in", cmd_input))
+    application.add_handler(CommandHandler("status", lambda u, c: u.message.reply_text("Nutze Status im Chat oder /sessions.")))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_universal))
     
     print("🚀 Phalanx 3.0 Universal Intelligence (OpenClaw Architecture) Online...")

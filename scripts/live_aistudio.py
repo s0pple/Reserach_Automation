@@ -1,21 +1,16 @@
 import asyncio
 import os
 import sys
+import json
 from playwright.async_api import async_playwright
 from telegram import Bot
+from src.modules.browser.ui_mapper import get_ui_map, find_in_map
 
-# Load env if needed
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
-
-# Config - Reuse the same profile we just set up!
+# Config
 PROFILE_PATH = "/app/browser_sessions/account_cassie"
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-# Get Chat ID safely
+# Get Chat ID
 try:
     ALLOWED = os.getenv("ALLOWED_TELEGRAM_USER_IDS", "")
     CHAT_ID = [id.strip() for id in ALLOWED.split(",") if id.strip()][0]
@@ -27,13 +22,17 @@ async def send_msg(text):
     if not TOKEN: return
     try:
         bot = Bot(token=TOKEN)
-        await bot.send_message(chat_id=CHAT_ID, text=text)
+        if len(text) > 4000:
+            for i in range(0, len(text), 4000):
+                await bot.send_message(chat_id=CHAT_ID, text=text[i:i+4000])
+        else:
+            await bot.send_message(chat_id=CHAT_ID, text=text)
     except Exception as e:
         print(f"⚠️ Msg Error: {e}")
 
 async def send_screenshot(page, caption=""):
     if not TOKEN: return
-    path = "temp/live_screenshot.png"
+    path = "temp/live_monitor.png"
     try:
         await page.screenshot(path=path)
         bot = Bot(token=TOKEN)
@@ -43,11 +42,11 @@ async def send_screenshot(page, caption=""):
         print(f"⚠️ Screenshot Error: {e}")
 
 async def main():
-    print("🚀 Starting LIVE AI Studio Controller")
-    await send_msg("🚀 Live-Controller gestartet! Warte auf Befehle...\n(new, model <name>, type <text>, send, exit)")
+    print("🚀 Starting Grounded AI Studio Bridge...")
+    await send_msg("🚀 **AI Studio Bridge Online (Grounded)**\nBefehle:\n- `new` (Reset)\n- `prompt <text>` (Chat)\n- `find <element>` (Grounded Search & Click)")
 
     async with async_playwright() as p:
-        headless = False # We need to see it (or Xvfb sees it)
+        headless = False 
         args = ["--no-sandbox", "--disable-blink-features=AutomationControlled"]
         if not os.getenv("DISPLAY"): os.environ["DISPLAY"] = ":99"
         
@@ -61,94 +60,104 @@ async def main():
         page = context.pages[0] if context.pages else await context.new_page()
         
         try:
-            print("🌍 Navigating to AI Studio...")
+            # Initial Load
             await page.goto("https://aistudio.google.com/app/prompts/new_chat", timeout=60000)
-            await page.wait_for_timeout(3000)
-            await send_screenshot(page, "✅ Ready in AI Studio")
+            await page.wait_for_timeout(5000)
+            
+            # Dismiss Banners
+            try:
+                banners = page.locator('button:has-text("Stimme zu"), button:has-text("I agree"), button:has-text("Accept")')
+                if await banners.count() > 0:
+                    await banners.first.click(force=True)
+            except: pass
+
+            await send_screenshot(page, "✅ Ready.")
 
             while True:
-                # 1. Wait for command from Stdin (piped from Telegram)
-                print("\n👇 WAITING FOR COMMAND 👇")
-                print("Type 'new', 'model <name>', 'type <text>', 'send', or 'exit'")
+                print("\n👇 WAITING FOR INPUT...")
+                command_line = await asyncio.to_thread(input, "")
+                command_line = command_line.strip()
+                if not command_line: continue
                 
-                # This input() blocks until the user sends a message via /cli input
-                command = await asyncio.to_thread(input, "Command > ")
-                command = command.strip()
+                cmd_parts = command_line.split(" ", 1)
+                action = cmd_parts[0].lower()
+                payload = cmd_parts[1] if len(cmd_parts) > 1 else ""
                 
-                if not command: continue
+                if action == "exit": break
                 
-                cmd_lower = command.lower()
-                
-                if cmd_lower == "exit":
-                    await send_msg("👋 Closing Session.")
-                    break
-                
-                elif cmd_lower.startswith("new") or cmd_lower.startswith("neu"):
-                    print("🆕 Creating New Chat...")
-                    # Try to find 'Create new' or similar button
-                    # The URL often resets state, or look for specific button
+                elif action in ["new", "neu", "reset"]:
                     await page.goto("https://aistudio.google.com/app/prompts/new_chat")
-                    await page.wait_for_timeout(2000)
-                    await send_screenshot(page, "🆕 New Chat Created")
+                    await page.wait_for_timeout(3000)
+                    await send_screenshot(page, "🔄 Reset.")
                     
-                elif cmd_lower.startswith("model"):
-                    model_name = command[5:].strip() # "model gemini 1.5" -> "gemini 1.5"
-                    print(f"🤖 Switching Model to: {model_name}")
+                elif action in ["type", "prompt", "reflect", "find"]:
+                    is_grounded = (action == "find")
+                    is_reflection = (action in ["reflect", "find"])
                     
-                    # Open dropdown (this selector is a guess, needs adjustment based on actual DOM)
-                    # We look for something that looks like a model selector.
-                    # Usually has aria-label="Select model" or class containing "model-selector"
-                    # For now, we try a robust text click approach if possible, or generic
-                    
-                    # 1. Click the dropdown trigger
                     try:
-                        # Attempt to find the model dropdown by common attributes
-                        await page.click("button[aria-haspopup='listbox']", timeout=2000) 
-                        await page.wait_for_timeout(500)
+                        path = "temp/current_screen.png"
+                        await page.screenshot(path=path)
                         
-                        # 2. Type model name to filter (if supported) or click text
-                        if model_name:
-                             # Try clicking text directly in the dropdown
-                             await page.click(f"text={model_name}", timeout=2000)
+                        ui_map = []
+                        if is_grounded:
+                            await send_msg("🔍 Erstelle Ground-Truth Map...")
+                            with open(path, "rb") as f:
+                                ui_map = await get_ui_map(f.read())
+                            prompt_payload = f"Liste der UI-Elemente: {json.dumps(ui_map)}. Ziel: '{payload}'. Welches exakte Element-Label muss ich klicken? Antworte NUR mit dem Label."
+                        else:
+                            prompt_payload = payload
+
+                        # Upload for reflection
+                        if is_reflection:
+                            plus = page.locator('button[aria-label*="Insert"], button:has-text("add_circle")')
+                            if await plus.count() > 0:
+                                await plus.first.click()
+                                await page.wait_for_timeout(500)
+                                await page.locator('role=menuitem:has-text("Upload")').click()
+                                await page.locator('input[type="file"]').set_input_files(path)
+                                await page.wait_for_timeout(2000)
+                            prompt_prefix = "Basierend auf dem Bild: "
+                        else:
+                            prompt_prefix = ""
+
+                        # Send Prompt
+                        textarea = page.locator('textarea, div[contenteditable="true"]').last
+                        await textarea.fill(f"{prompt_prefix}{prompt_payload}")
+                        await page.keyboard.press("Control+Enter")
+                        await send_msg("⏳ Gemini plant...")
+
+                        # Wait & Scrape
+                        await asyncio.sleep(5)
+                        stop_btn = page.locator('button:has-text("Stop")')
+                        for _ in range(20):
+                            if await stop_btn.count() == 0: break
+                            await asyncio.sleep(1)
+                        
+                        response_locator = page.locator('div.model-response-text, div.markdown-renderer').last
+                        response_text = await response_locator.inner_text() if await response_locator.count() > 0 else "Extraktion fehlgeschlagen."
+
+                        if is_grounded:
+                            target_label = response_text.strip().strip('"')
+                            match = find_in_map(ui_map, target_label)
+                            if match:
+                                await send_msg(f"🎯 Klicke '{match['text']}' @ {match['x']},{match['y']}")
+                                await page.mouse.click(match['x'], match['y'])
+                                await page.wait_for_timeout(2000)
+                                await send_screenshot(page, "✅ Aktion ausgeführt")
+                            else:
+                                await send_msg(f"❌ '{target_label}' nicht in Map gefunden.")
+                        else:
+                            await send_msg(f"📝 Antwort:\n{response_text[:3000]}")
+                            await send_screenshot(page, "📸 View")
+
                     except Exception as e:
-                        print(f"⚠️ Model switch failed (trying fallback): {e}")
-                        # Fallback: Just print we tried
-                        await send_msg(f"⚠️ Konnte Modell-Selector nicht finden. DOM hat sich evtl. geändert.\nFehler: {e}")
-
-                    await page.wait_for_timeout(1000)
-                    await send_screenshot(page, f"🤖 Model Attempt: {model_name}")
-
-                elif cmd_lower.startswith("type") or cmd_lower.startswith("prompt"):
-                    text_to_type = command.split(" ", 1)[1] if " " in command else ""
-                    print(f"⌨️ Typing: {text_to_type}")
-                    
-                    # Focus the main prompt area. Usually a textarea or contenteditable div.
-                    # Common selector for AI Studio prompt box:
-                    selector = "textarea" 
-                    # If multiple, usually the last one or largest is the prompt
-                    
-                    try:
-                        await page.click(selector)
-                        await page.keyboard.type(text_to_type)
-                        await send_screenshot(page, "⌨️ Typed Text")
-                    except Exception as e:
-                        await send_msg(f"⚠️ Error typing: {e}")
-
-                elif cmd_lower == "send" or cmd_lower == "run":
-                    print("🚀 Sending Prompt...")
-                    # Ctrl+Enter is the standard shortcut
-                    await page.keyboard.press("Control+Enter")
-                    await page.wait_for_timeout(5000) # Wait for response
-                    await send_screenshot(page, "🚀 Response Generated?")
-                
-                else:
-                    # Treat unknown commands as just typing? Or error?
-                    print(f"❓ Unknown command: {command}")
-                    await send_msg(f"❓ Unbekannter Befehl: '{command}'. Nutze: new, model, type, send, exit.")
+                        await send_msg(f"💥 Fehler: {e}")
+                        
+                elif action == "screenshot":
+                     await send_screenshot(page, "📸 Screen")
 
         except Exception as e:
-            await send_msg(f"💥 Critical Error: {e}")
-            print(f"Error: {e}")
+            await send_msg(f"💥 Fatal: {e}")
         finally:
             await context.close()
 

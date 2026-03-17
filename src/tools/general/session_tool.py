@@ -28,32 +28,46 @@ class TmuxSessionManager:
         """
         Periodically captures the pane to check if the bottom lines changed
         or if it looks like it is waiting for input.
+        Reports termination with a summary.
         """
         logger.info(f"Starting watcher for tmux session {session_id}")
         last_content = ""
+        last_captured_lines = []
         try:
             while True:
                 session = self.get_session(session_id)
                 if not session:
-                    await telegram_callback(f"🛑 **Session `{session_id}`** ist nicht mehr aktiv.")
+                    # Session finished - try to find if it left a trace or just say it's done
+                    summary = "\n".join(last_captured_lines[-10:]) if last_captured_lines else "Keine Daten erfasst."
+                    await telegram_callback(f"🏁 **Session `{session_id}` beendet.**\n\n**Zusammenfassung (letzte Zeilen):**\n```text\n{summary}\n```")
                     break
                 
-                pane = session.active_window.active_pane
-                lines = pane.cmd("capture-pane", "-p", "-S", "-20").stdout
-                current_content = self._clean_output(lines).strip()
-                
-                if current_content != last_content:
-                    if current_content.endswith(("?", ">", "$", "]", ":")) or " [y/N]" in current_content:
-                         await telegram_callback(f"🖥️ **Session `{session_id}` (Wartet auf Input):**\n```text\n{current_content[-1500:]}\n```")
-                         last_content = current_content
-                    else:
-                        last_content = current_content
+                try:
+                    pane = session.active_window.active_pane
+                    lines = pane.cmd("capture-pane", "-p", "-S", "-20").stdout
+                    last_captured_lines = lines # Keep track for summary
+                    current_content = self._clean_output(lines).strip()
+                    
+                    if current_content != last_content:
+                        # Report if it looks like it's waiting for input
+                        # Check last non-empty line
+                        if current_content.endswith(("?", ">", "$", "]", ":")) or " [y/N]" in current_content:
+                             await telegram_callback(f"🖥️ **Session `{session_id}` (Wartet auf Input):**\n```text\n{current_content[-1500:]}\n```")
+                             last_content = current_content
+                        else:
+                            # Just update last_content to avoid spam, but keep last_captured_lines fresh
+                            last_content = current_content
+                except Exception as pane_err:
+                    logger.warning(f"Error capturing pane for {session_id}: {pane_err}")
 
-                await asyncio.sleep(2.0)
+                await asyncio.sleep(3.0) # Check every 3 seconds
         except asyncio.CancelledError:
             logger.info(f"Watcher for {session_id} cancelled.")
         except Exception as e:
             logger.error(f"Error watching session {session_id}: {e}")
+        finally:
+            if session_id in self.watchers:
+                del self.watchers[session_id]
 
     async def execute(self, params: Dict[str, Any], telegram_callback: Callable = None) -> Dict[str, Any]:
         action = params.get("action")

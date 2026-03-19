@@ -38,7 +38,7 @@ Available Tools:
 IMPORTANT MAPPING RULES:
 - "status", "was läuft", "zeig jobs", "hallo", "hilfe", "funktionen", "welche tools", "was kannst du" -> Tool: project_status_tool
 - "terminal", "console", "cli", "sessions" -> Tool: interactive_session_tool (action='list')
-- "ai studio", "gemini", "modell wechseln", "neuer chat", "schreibe prompt" -> Tool: ai_studio_tool
+- "ai studio", "gemini", "modell wechseln", "neuer chat", "schreibe prompt", "stop", "beende", "aistudio" -> Tool: ai_studio_tool
 - "research", "recherchiere", "google", "such nach", "deep research" -> Tool: deep_research
 - "bitcoin preis", "kaufe tickets", "geh auf seite X", "navigiere", "browser task" -> Tool: web_nav_tool (Parameter: goal)
 - "screenshot", "bildschirm", "watch", "zeig mir" -> Tool: watch_tool

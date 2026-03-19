@@ -14,6 +14,16 @@
 
 ## 🚀 Roadmap (Vision 2026)
 
+- ### 🛠️ Sprint 3.1: "Grounded Vision & Remote Commander"
+- **Priority:** Critical | **Tags:** `[Vision]`, `[Remote]`, `[Grounding]`
+- **Status:** [2026-03-17] **IMPLEMENTIERT (Flash Delivery)**
+- **Key Features:** 
+  - **Grounded UI Bridge:** Trennung von Planung (Gemini) und Realität (OCR Map). Klick auf echte Koordinaten in AI Studio.
+  - **Telegram CLI Master:** `/cli`, `/sessions` und `/in` Befehle für volle Remote-Kontrolle über tmux-Sessions.
+  - **Completion Watcher:** Automatische Zusammenfassung von fertigen CLI-Sessions (letzte 10 Zeilen).
+  - **Visual Reflection:** AI Studio Controller mit Screenshot-Upload & Grounded Action Loop.
+- **Next Step:** Implementierung von Phase 4 (Verification Loop) und Phase 5 (Skill-Memory).
+
 - ### 🛠️ Sprint 3: "Phalanx 3.0 - The Self-Evolving Agent OS"
 - **Priority:** Critical | **Tags:** `[Architecture]`, `[Self-Learning]`, `[Discovery]`
 - **Status:** [2026-03-15] **Initialer Masterplan (Plan 11) erstellt.**

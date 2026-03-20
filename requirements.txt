@@ -1,43 +1,24 @@
-# Core Intelligence & Orchestration
-google-api-python-client
-google-generativeai
-google-genai
-openai
-langchain
-langchain-openai
-langgraph
+# Core MCP & API
+mcp
+fastapi
+uvicorn
 pydantic
 pydantic-settings
-requests
-ollama
 
-# Search & Scraping
-duckduckgo-search
+# Browser Automation (The Engine)
 playwright
 beautifulsoup4
-trafilatura
-httpx
 
-# Embeddings & Vector Storage
-chromadb
-sentence-transformers
-
-# Data Processing & CLI
-rich
-pandas
-pyyaml
-sqlalchemy
-aioconsole
-
-# Computer Vision & Automation (CV Bot)
+# Computer Vision & Automation
 opencv-python
 mss
 pyautogui
-keyboard
 numpy
 
-# Testing
-pytest
-pytest-asyncio
+# Telegram Integration (Monitoring)
 python-telegram-bot>=21.0.0
-pyperclip
+
+# Legacy / Utils (Keep for now)
+requests
+pyyaml
+rich

@@ -1,25 +1,44 @@
 version: '3.8'
 
 services:
-  cv-agent:
+  gemini-acc-1:
     build: 
       context: .
-      dockerfile: Dockerfile.cvbot
-    container_name: research_cv_agent
-    restart: always
-    volumes:
-      # Spiegelung des Research_Automation Projekt-Codes
-      - .:/app
-      # Spiegelung deiner getweakten Gemini CLI Version (Tieferer Ordner wegen GitHub Zip)
-      - C:/Users/olive/Downloads/gemini-cli-main/gemini-cli-main:/gemini-cli-custom
-      # Anonyme Volumes für node_modules, damit Linux-Symlinks nicht nach Windows synchronisiert werden
-      - /gemini-cli-custom/node_modules
-      - /gemini-cli-custom/packages/cli/node_modules
-      - /gemini-cli-custom/packages/core/node_modules
+      dockerfile: infra/docker/Dockerfile.mcp
+    container_name: mcp_gemini_1
+    restart: unless-stopped
     environment:
-      # Gibt die API-Keys an den Container weiter
+      - ACCOUNT_ID=acc_1
+      - DISPLAY=:99
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-    # Optional: Ein .env File automatisch laden
+    volumes:
+      # Code Sync
+      - ./src:/app/src
+      # Account 1 Session (Persistent)
+      - ./data/browser_sessions/acc_1:/app/data/browser_sessions/acc_1
+      # Logs/Temp
+      - ./temp:/app/temp
+    ports:
+      - "8001:8000" # MCP Port for Account 1
+    env_file:
+      - .env
+  gemini-acc-2:
+    build: 
+      context: .
+      dockerfile: infra/docker/Dockerfile.mcp
+    container_name: mcp_gemini_2
+    restart: unless-stopped
+    environment:
+      - ACCOUNT_ID=acc_2
+      - DISPLAY=:99
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    volumes:
+      - ./src:/app/src
+      - ./data/browser_sessions/acc_2:/app/data/browser_sessions/acc_2      
+      - ./temp:/app/temp
+    ports:
+      - "8002:8000" # MCP Port for Account 2
     env_file:
       - .env

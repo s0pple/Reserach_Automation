@@ -1,0 +1,42 @@
+FROM python:3.11-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DISPLAY=:99
+ENV PYTHONUNBUFFERED=1
+
+# 1. System Dependencies (Merged from Dockerfile.cvbot + additions)
+RUN apt-get update && apt-get install -y \
+    xvfb \
+    fluxbox \
+    x11-xserver-utils \
+    x11-utils \
+    scrot \
+    libnss3 \
+    libxss1 \
+    libasound2 \
+    libgl1 \
+    libglib2.0-0 \
+    curl \
+    git \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 2. Python Packages
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 3. Playwright Browsers & Deps
+RUN playwright install chromium
+RUN playwright install-deps chromium
+
+# 4. Setup Entrypoint
+COPY infra/docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# 5. Healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD xdpyinfo -display $DISPLAY >/dev/null || exit 1
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

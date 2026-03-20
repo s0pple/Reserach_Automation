@@ -1,17 +1,35 @@
 import asyncio
 import logging
 from aiohttp import web
-from pyngrok import ngrok
 import time
+import subprocess
+import re
 
 logger = logging.getLogger("MagicLink")
 
-# Ngrok Auth Token Setup (optional, but good if configured. We'll use default public)
-# It's better to just use standard ephemeral tunnels.
+async def start_ssh_tunnel(port):
+    """Startet einen SSH Tunnel zu serveo.net und gibt die URL zurück."""
+    proc = await asyncio.create_subprocess_exec(
+        "ssh", "-o", "StrictHostKeyChecking=no", "-R", f"80:localhost:{port}", "serveo.net",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    
+    # Lese die erste Zeile, um die URL zu extrahieren
+    for _ in range(10):
+        try:
+            line = await asyncio.wait_for(proc.stdout.readline(), timeout=1.0)
+            line = line.decode('utf-8').strip()
+            if "Forwarding HTTP traffic from" in line:
+                url = line.split("from ")[-1].strip()
+                return url, proc
+        except asyncio.TimeoutError:
+            continue
+    return None, proc
 
 async def get_user_click_via_magic_link(image_path: str, bot_app, chat_id: str, action_verb: str = "klicken"):
     """
-    Spins up a temporary web server, exposes it via ngrok, and sends the link to the user.
+    Spins up a temporary web server, exposes it via serveo, and sends the link to the user.
     Waits until the user clicks on the image, then returns (x, y).
     """
     click_event = asyncio.Event()
@@ -93,9 +111,15 @@ async def get_user_click_via_magic_link(image_path: str, bot_app, chat_id: str, 
     site = web.TCPSite(runner, '0.0.0.0', server_port)
     await site.start()
 
+    tunnel_proc = None
     try:
-        # Start ngrok
-        public_url = ngrok.connect(server_port).public_url
+        # Start SSH Tunnel
+        public_url, tunnel_proc = await start_ssh_tunnel(server_port)
+        
+        if not public_url:
+            await bot_app.bot.send_message(chat_id=CHAT_ID, text="❌ Tunnel konnte nicht aufgebaut werden.")
+            return None
+
         logger.info(f"Magic Link live at {public_url}")
 
         # Send to Telegram
@@ -117,7 +141,8 @@ async def get_user_click_via_magic_link(image_path: str, bot_app, chat_id: str, 
         
     finally:
         # Cleanup everything instantly
-        ngrok.kill()
+        if tunnel_proc:
+            tunnel_proc.terminate()
         await runner.cleanup()
 
     return click_coords

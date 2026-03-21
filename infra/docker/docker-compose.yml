@@ -21,6 +21,7 @@ services:
       - ./temp:/app/temp
     ports:
       - "8001:8000" # MCP Port for Account 1
+      - "5901:5900" # VNC Port to watch the screen
     env_file:
       - .env
   gemini-acc-2:
@@ -36,9 +37,10 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     volumes:
       - ./src:/app/src
-      - ./data/browser_sessions/acc_2:/app/data/browser_sessions/acc_2      
+      - ./data/browser_sessions/acc_2:/app/data/browser_sessions/acc_2
       - ./temp:/app/temp
     ports:
       - "8002:8000" # MCP Port for Account 2
+      - "5902:5900" # VNC Port to watch the screen
     env_file:
       - .env

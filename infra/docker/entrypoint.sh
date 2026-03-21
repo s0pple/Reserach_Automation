@@ -20,8 +20,12 @@ done
 echo "[Entrypoint] Starting Fluxbox..."
 fluxbox > /dev/null 2>&1 &
 
+# 2.5 Start VNC Server to watch the Linux screen (No password)
+echo "[Entrypoint] Starting VNC Server on port 5900..."
+x11vnc -display :99 -nopw -forever -shared -quiet &
+
 # 3. Start MCP Server (The Main Process)
 # Assuming main.py or similar entrypoint exists. 
 # We'll use a placeholder for now, to be replaced by the actual python start command.
-echo "[Entrypoint] Starting MCP Server for Account: $ACCOUNT_ID..."
-exec python -m src.mcp.server.main
+echo "[Entrypoint] Ready for Interactive Debugging! Keeping container alive."
+tail -f /dev/null

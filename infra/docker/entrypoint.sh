@@ -28,4 +28,4 @@ x11vnc -display :99 -nopw -forever -shared -quiet &
 # Assuming main.py or similar entrypoint exists. 
 # We'll use a placeholder for now, to be replaced by the actual python start command.
 echo "[Entrypoint] Ready for Interactive Debugging! Keeping container alive."
-tail -f /dev/null
+export PYTHONPATH=/app ; python src/mcp/server/main.py

@@ -10,186 +10,130 @@ from playwright.async_api import async_playwright
 
 from src.core.ai_studio_controller import AIStudioController
 
-# =========================================================================
-# LAYER 1: Task Queue & Models
-# =========================================================================
-
 @dataclass
 class BrowserTask:
-    account_id: str
-    action: str  # e.g., "generate", "init"
+    session_id: str
+    action: str
     prompt: Optional[str] = None
     model_name: Optional[str] = None
     system_instruction: Optional[str] = None
     future: asyncio.Future = None
 
-# Globals
 task_queue: asyncio.Queue = asyncio.Queue()
-
-# =========================================================================
-# LAYER 3: Tab Registry & Context Management
-# =========================================================================
 
 class TabRegistry:
     def __init__(self):
         self.playwright = None
-        self.contexts: Dict[str, any] = {}      # account_id -> BrowserContext
-        self.controllers: Dict[str, AIStudioController] = {} # account_id -> Controller
+        self.context = None
+        self.controllers: Dict[str, AIStudioController] = {}
         self.max_tabs = 3
-    
-    async def get_or_create_controller(self, account_id: str) -> AIStudioController:
+        self.account_id = os.getenv('ACCOUNT_ID', 'default_acc')
+
+    async def get_or_create_controller(self, session_id: str) -> AIStudioController:
         if not self.playwright:
             self.playwright = await async_playwright().start()
 
-        if account_id in self.controllers:
-            return self.controllers[account_id]
-        
-        # Enforce max tabs to protect RAM (ca. 300-500MB per UI context)
-        if len(self.contexts) >= self.max_tabs:
-            raise RuntimeError(f"RAM-Schutz aktiv: Maximum von {self.max_tabs} aktiven Browser-Profilen erreicht. Nutze einen existierenden account_id oder implementiere automatischen Cleanup.")
+        if not self.context:
+            profile_path = f'/app/data/browser_sessions/{self.account_id}'
+            print(f'[TabRegistry] Lade 1-CONTAINER Context fuer {self.account_id}...')
+            self.context = await self.playwright.chromium.launch_persistent_context(
+                user_data_dir=profile_path,
+                headless=False,
+                viewport={'width': 1280, 'height': 720},
+                args=['--disable-blink-features=AutomationControlled', '--no-sandbox', '--disable-dev-shm-usage']
+            )
 
-        # Mount specific user data dir
-        profile_path = f"/app/data/browser_sessions/account_{account_id}"
-        
-        print(f"[TabRegistry] Lade Context f?r '{account_id}' in den Speicher...")
-        
-        context = await self.playwright.chromium.launch_persistent_context(
-            user_data_dir=profile_path,
-            headless=False,  # In Xvfb Docker environment always render to display
-            viewport={"width": 1280, "height": 720},
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-dev-shm-usage"
-            ]
-        )
-        
-        page = context.pages[0] if context.pages else await context.new_page()
+        if session_id in self.controllers:
+            return self.controllers[session_id]
+
+        if len(self.controllers) >= self.max_tabs:
+            raise RuntimeError(f'RAM-Schutz aktiv. Maximum {self.max_tabs} erreicht.')
+
+        if len(self.controllers) == 0 and len(self.context.pages) > 0:
+            page = self.context.pages[0]
+        else:
+            page = await self.context.new_page()
+            
         controller = AIStudioController(page)
-        
-        print(f"[TabRegistry] Initialisiere Session in Tab f?r '{account_id}'")
+        print(f'[TabRegistry] Initialisiere Session in TAB fuer {session_id}')
         await controller.init_session()
-        
-        self.contexts[account_id] = context
-        self.controllers[account_id] = controller
-        
+        self.controllers[session_id] = controller
         return controller
 
 tab_registry = TabRegistry()
 
-# =========================================================================
-# LAYER 2: The "Maus-Gott" Worker Loop
-# =========================================================================
-
 async def browser_worker_loop():
-    """
-    Dieser Worker zieht Tasks aus der Queue und f?hrt sie strikt sequenziell aus.
-    Verhindert Maus-Locking/Fokus-Probleme auf Systemebene.
-    """
-    print("?? [Worker] Maus-Gott Loop gestartet. Wartet auf Tasks...")
+    print('?? [Worker] Maus-Gott Loop gestartet...')
     while True:
         task: BrowserTask = await task_queue.get()
-        print(f"[Worker] ?? Task gepickt: {task.account_id} | {task.action}")
-        
+        print(f'[Worker] Task gepickt: Session {task.session_id} | {task.action}')
+
         try:
-            # 90 Sekunden Limit. In echt (laden, schreiben, generieren) 
-            # dauern komplexe Prompts auch bis zu 40s.
             async with asyncio.timeout(90.0):
-                
-                # 1. Hole/Erstelle Tab
-                controller = await tab_registry.get_or_create_controller(task.account_id)
-                
-                # 2. Fokus auf den Tab der gerade an der Reihe ist
+                controller = await tab_registry.get_or_create_controller(task.session_id)
                 await controller.page.bring_to_front()
-                # Kurze Pause f?r Xvfb WM zum reagieren
                 await controller.page.wait_for_timeout(500)
-                
-                # 3. Aktion ausf?hren
-                if task.action == "generate":
+
+                if task.action == 'generate':
                     if task.model_name:
                         await controller.set_model(task.model_name)
-                        
                     await controller.send_prompt(task.prompt)
                     response = await controller.wait_for_response()
-                    
-                    # Ergebnis zur?ckgeben
                     task.future.set_result(response)
-                    
                 else:
-                    raise ValueError(f"Unbekannte Aktion: {task.action}")
-                    
+                    raise ValueError(f'Unbekannte Aktion: {task.action}')
+
         except TimeoutError:
-            err_msg = f"Task Timeout (> 90s) f?r Account: {task.account_id}."
-            print(f"? [Worker] {err_msg}")
+            err_msg = f'Timeout (> 90s) fuer Session: {task.session_id}.'
+            print(err_msg)
             task.future.set_exception(Exception(err_msg))
         except Exception as e:
-            print(f"? [Worker] Fehler: {e}")
+            print(f'Fehler: {e}')
             task.future.set_exception(e)
-            
         finally:
-            print(f"? [Worker] Task f?r {task.account_id} beendet. Gebe Lock frei.")
+            print(f'Task fuer Session {task.session_id} beendet. Lock frei.')
             task_queue.task_done()
 
-# =========================================================================
-# FAST MCP SERVER (Layer 1 API)
-# =========================================================================
-
-mcp = FastMCP("Browser-Hub-God-Container")
+mcp = FastMCP('Browser-Hub-God-Container')
 
 @mcp.tool()
-async def ask_gemini(account_id: str, prompt: str, model_name: str = "Gemini 3.1 Pro Preview") -> str:
-    """
-    F?hrt einen Prompt in Google AI Studio in einem persistenten Account aus.
-    Ergreift automatisch X11 Fokus und sch?tzt vor ?berschneidungen durch eine globale Queue.
-    """
+async def ask_gemini(session_id: str, prompt: str, model_name: str = 'Gemini 3.1 Pro Preview') -> str:
     loop = asyncio.get_running_loop()
     future = loop.create_future()
-    
     queue_pos = task_queue.qsize()
-    print(f"[MCP-API] Reiht Task ein f?r {account_id}. Position: {queue_pos}")
-    
+    print(f'[MCP] Task fuer {session_id} auf pos {queue_pos}')
+
     task = BrowserTask(
-        account_id=account_id,
-        action="generate",
-        prompt=prompt,
-        model_name=model_name,
-        future=future
+        session_id=session_id, action='generate', prompt=prompt,
+        model_name=model_name, future=future
     )
     await task_queue.put(task)
-    
     try:
-        # Await execution in the backend loop
-        result = await future
-        return result
+        return await future
     except Exception as e:
-        return f"Browser-Worker failed: {str(e)}"
-
-# =========================================================================
-# APP & SETUP
-# =========================================================================
+        return f'Worker failed: {str(e)}'
 
 app = FastAPI()
 
-@app.on_event("startup")
+@app.on_event('startup')
 async def startup_event():
-    # Registriert den Worker-Endlos-Loop, sobald FastAPI / Uvicorn startet
     asyncio.create_task(browser_worker_loop())
 
-@app.get("/health")
+@app.get('/health')
 async def health_check():
     return {
-        "status": "online",
-        "queue_size": task_queue.qsize(),
-        "active_profiles": list(tab_registry.contexts.keys()),
-        "max_tabs_allowed": tab_registry.max_tabs
+        'status': 'online',
+        'queue_size': task_queue.qsize(),
+        'active_sessions': list(tab_registry.controllers.keys()),
+        'max_tabs_allowed': tab_registry.max_tabs,
+        'container_account': tab_registry.account_id
     }
 
-# MCP in die FastAPI mounten (/sse f?r WebTransport)
-app.mount("/", mcp.sse_app)
+app.mount('/', mcp.sse_app())
 
-if __name__ == "__main__":
-    PORT = int(os.getenv("PORT", 8000))
-    print("=" * 60)
-    print(f"?? Starte God-Container Browser Hub auf Port {PORT}")
-    print("=" * 60)
-    uvicorn.run(app, host="0.0.0.0", port=PORT)
+if __name__ == '__main__':
+    PORT = int(os.getenv('PORT', 8000))
+    print('=' * 60)
+    print(f'?? Starte God-Container Browser Hub Port {PORT}')
+    print('=' * 60)
+    uvicorn.run(app, host='0.0.0.0', port=PORT)

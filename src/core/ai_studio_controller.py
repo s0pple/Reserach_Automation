@@ -13,7 +13,7 @@ class AIStudioController:
     async def init_session(self):
         """Navigiert auf die Seite und wartet, bis sie geladen ist."""
         print("[AIStudioController] Navigiere zu AI Studio...")
-        await self.page.goto(self.url, wait_until="networkidle")
+        await self.page.goto(self.url, wait_until="domcontentloaded")
         await self.page.wait_for_timeout(3000)
         
         # Cookie Banner wegklicken!

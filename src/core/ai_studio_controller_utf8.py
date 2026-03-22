@@ -158,4 +158,3 @@ class AIStudioController:
         
         result = "\n".join(result_parts)
         print(f"[AIStudioController] Erfolgreich {len(result)} Zeichen extrahiert!")
-        return result.strip()

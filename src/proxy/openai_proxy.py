@@ -10,8 +10,8 @@ import random
 
 app = FastAPI()
 
-# Wir balancen einfach zwischen Container 1 (8001) und Container 2 (8002)
-PORTS = [8001, 8002]
+# Wir balancen aktuell nur zu Container 1 (8001), um visuell auf VNC (5901) zu debuggen
+PORTS = [8001]
 
 async def ask_browser_agent(prompt: str) -> str:
     port = random.choice(PORTS)
@@ -26,15 +26,24 @@ async def ask_browser_agent(prompt: str) -> str:
         
         # Initialisiere die MCP-Verbindung
         await session.initialize()
-        
-        # Führe das KI-Studio-Tool aus
-        result = await session.call_tool("ask_google_ai_studio", {"prompt": prompt})
-        
+
+        # Führe das KI-Studio-Tool aus. Hier muss 'ask_gemini' und nicht 'ask_google_ai_studio' stehen
+        result = await session.call_tool("ask_gemini", {
+            "session_id": f"aider_{uuid.uuid4().hex[:8]}",
+            "prompt": prompt,
+            "model_name": "Gemini 3.1 Pro Preview"
+        })
         if result.isError:
             return f"Fehler vom Container auf Port {port}: {result.content}"
         else:
             # result.content ist eine Liste von TextContent-Objekten
-            return result.content[0].text
+            raw_text = result.content[0].text
+            # AI Studio "innerText" zerreißt den Markdown Code Block in:
+            # code\nPython\ndownload\ncontent_copy\nexpand_less\n# docker_test.py...
+            import re
+            
+            print(f"Proxy raw length received: {len(raw_text)}")
+            return raw_text
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
@@ -83,5 +92,5 @@ async def chat_completions(request: Request):
     }
 
 if __name__ == "__main__":
-    # Startet den Server auf Port 9000
-    uvicorn.run(app, host="0.0.0.0", port=9000)
+    # Startet den Server auf Port 9001
+    uvicorn.run(app, host="0.0.0.0", port=9001)

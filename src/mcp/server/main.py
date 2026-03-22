@@ -11,6 +11,7 @@ from playwright.async_api import async_playwright
 from src.core.ai_studio_controller import AIStudioController
 from src.core.chatgpt_controller import ChatGPTController
 from src.core.claude_controller import ClaudeController
+from src.core.deepseek_controller import DeepSeekController
 
 @dataclass
 class BrowserTask:
@@ -61,6 +62,8 @@ class TabRegistry:
             controller = ChatGPTController(page)
         elif provider == 'CLAUDE':
             controller = ClaudeController(page)
+        elif provider == 'DEEPSEEK':
+            controller = DeepSeekController(page)
         else:
             controller = AIStudioController(page)
             
@@ -151,6 +154,23 @@ async def ask_claude(session_id: str, prompt: str, model_name: str = 'Claude') -
     task = BrowserTask(
         session_id=session_id, action='generate', prompt=prompt,
         model_name=model_name, model_provider='CLAUDE', future=future
+    )
+    await task_queue.put(task)
+    try:
+        return await future
+    except Exception as e:
+        return f'Worker failed: {str(e)}'
+
+@mcp.tool()
+async def ask_deepseek(session_id: str, prompt: str, model_name: str = 'DeepSeek') -> str:
+    loop = asyncio.get_running_loop()
+    future = loop.create_future()
+    queue_pos = task_queue.qsize()
+    print(f'[MCP] Task fuer {session_id} (DeepSeek) auf pos {queue_pos}')
+
+    task = BrowserTask(
+        session_id=session_id, action='generate', prompt=prompt,
+        model_name=model_name, model_provider='DEEPSEEK', future=future
     )
     await task_queue.put(task)
     try:

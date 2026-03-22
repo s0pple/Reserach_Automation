@@ -8,7 +8,7 @@ class ClaudeController:
     """
     def __init__(self, page: Page):
         self.page = page
-        self.url = "https://claude.ai/new"
+        self.url = "https://claude.ai/"
 
     async def init_session(self):
         """Navigiert auf die Seite und wartet, bis sie geladen ist."""

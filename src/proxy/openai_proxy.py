@@ -48,6 +48,13 @@ async def ask_browser_agent(prompt: str, model: str = "browser-agent-gemini") ->
                 "prompt": prompt,
                 "model_name": "Claude"
             }
+        elif "deepseek" in model.lower():
+            tool_name = "ask_deepseek"
+            tool_args = {
+                "session_id": f"aider_{uuid.uuid4().hex[:8]}",
+                "prompt": prompt,
+                "model_name": "DeepSeek"
+            }
 
         # Führe das KI-Studio-Tool aus
         result = await session.call_tool(tool_name, tool_args)

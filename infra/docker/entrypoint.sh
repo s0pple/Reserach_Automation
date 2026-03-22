@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# Cleanup any stale locks from previous unclean shutdowns
+echo "[Entrypoint] Cleaning up old Xvfb locks..."
+rm -rf /tmp/.X99-lock /tmp/.X11-unix/X99
+
 # 1. Start Xvfb (Virtual Display) in background
 echo "[Entrypoint] Starting Xvfb on :99..."
 Xvfb :99 -screen 0 1280x800x24 > /dev/null 2>&1 &

@@ -1,7 +1,7 @@
 import os
 import asyncio
 from dataclasses import dataclass
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 
 import uvicorn
 from fastapi import FastAPI
@@ -9,6 +9,8 @@ from mcp.server.fastmcp import FastMCP
 from playwright.async_api import async_playwright
 
 from src.core.ai_studio_controller import AIStudioController
+from src.core.chatgpt_controller import ChatGPTController
+from src.core.claude_controller import ClaudeController
 
 @dataclass
 class BrowserTask:
@@ -16,6 +18,7 @@ class BrowserTask:
     action: str
     prompt: Optional[str] = None
     model_name: Optional[str] = None
+    model_provider: Optional[str] = 'AI_STUDIO'  # Differentiates which controller to use
     system_instruction: Optional[str] = None
     future: asyncio.Future = None
 
@@ -25,11 +28,11 @@ class TabRegistry:
     def __init__(self):
         self.playwright = None
         self.context = None
-        self.controllers: Dict[str, AIStudioController] = {}
+        self.controllers: Dict[str, Any] = {}
         self.max_tabs = 3
         self.account_id = os.getenv('ACCOUNT_ID', 'default_acc')
 
-    async def get_or_create_controller(self, session_id: str) -> AIStudioController:
+    async def get_or_create_controller(self, session_id: str, provider: str = 'AI_STUDIO') -> Any:
         if not self.playwright:
             self.playwright = await async_playwright().start()
 
@@ -53,9 +56,15 @@ class TabRegistry:
             page = self.context.pages[0]
         else:
             page = await self.context.new_page()
+
+        if provider == 'CHATGPT':
+            controller = ChatGPTController(page)
+        elif provider == 'CLAUDE':
+            controller = ClaudeController(page)
+        else:
+            controller = AIStudioController(page)
             
-        controller = AIStudioController(page)
-        print(f'[TabRegistry] Initialisiere Session in TAB fuer {session_id}')
+        print(f'[TabRegistry] Initialisiere Session in TAB fuer {session_id} mit {provider}')
         await controller.init_session()
         self.controllers[session_id] = controller
         return controller
@@ -70,13 +79,15 @@ async def browser_worker_loop():
 
         try:
             async with asyncio.timeout(90.0):
-                controller = await tab_registry.get_or_create_controller(task.session_id)
+                provider = task.model_provider if hasattr(task, 'model_provider') and task.model_provider else 'AI_STUDIO'
+                controller = await tab_registry.get_or_create_controller(task.session_id, provider)
                 await controller.page.bring_to_front()
                 await controller.page.wait_for_timeout(500)
 
                 if task.action == 'generate':
-                    if task.model_name:
+                    if hasattr(controller, 'set_model') and task.model_name and provider == 'AI_STUDIO':
                         await controller.set_model(task.model_name)
+                    
                     await controller.send_prompt(task.prompt)
                     response = await controller.wait_for_response()
                     task.future.set_result(response)
@@ -105,7 +116,41 @@ async def ask_gemini(session_id: str, prompt: str, model_name: str = 'Gemini 3.1
 
     task = BrowserTask(
         session_id=session_id, action='generate', prompt=prompt,
-        model_name=model_name, future=future
+        model_name=model_name, model_provider='AI_STUDIO', future=future
+    )
+    await task_queue.put(task)
+    try:
+        return await future
+    except Exception as e:
+        return f'Worker failed: {str(e)}'
+
+@mcp.tool()
+async def ask_chatgpt(session_id: str, prompt: str, model_name: str = 'ChatGPT') -> str:
+    loop = asyncio.get_running_loop()
+    future = loop.create_future()
+    queue_pos = task_queue.qsize()
+    print(f'[MCP] Task fuer {session_id} (ChatGPT) auf pos {queue_pos}')
+
+    task = BrowserTask(
+        session_id=session_id, action='generate', prompt=prompt,
+        model_name=model_name, model_provider='CHATGPT', future=future
+    )
+    await task_queue.put(task)
+    try:
+        return await future
+    except Exception as e:
+        return f'Worker failed: {str(e)}'
+
+@mcp.tool()
+async def ask_claude(session_id: str, prompt: str, model_name: str = 'Claude') -> str:
+    loop = asyncio.get_running_loop()
+    future = loop.create_future()
+    queue_pos = task_queue.qsize()
+    print(f'[MCP] Task fuer {session_id} (Claude) auf pos {queue_pos}')
+
+    task = BrowserTask(
+        session_id=session_id, action='generate', prompt=prompt,
+        model_name=model_name, model_provider='CLAUDE', future=future
     )
     await task_queue.put(task)
     try:

@@ -91,16 +91,20 @@ class AIStudioController:
             # Die Prompt-Eingabe ist immer die absolute *letzte* Textarea auf der Seite
             prompt_box = self.page.locator("textarea").last
             await prompt_box.click() # Fokussieren
-            await prompt_box.clear(); await self.page.keyboard.type(prompt) # Fill triggert die Angular Events (aktiviert Run Button)
-            await self.page.wait_for_timeout(1000)
+            await prompt_box.clear()
+            # Schnelles Einfügen statt Tippen (für große Prompts)
+            await prompt_box.fill(prompt)
+            # Stellen sicher, dass UI Events gefeuert werden
+            await prompt_box.evaluate("(el, value) => { el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); }", prompt)
+            await self.page.wait_for_timeout(500)
             
-            # Klicke explizit auf "Run" statt Ctrl+Enter
-            try:
-                print("[AIStudioController] Klicke definierten Run Button...")
-                await self.page.locator("button").filter(has_text="Run").last.click(timeout=3000)
-            except Exception as e:
-                print(f"[AIStudioController] Run Button nicht gefunden, fallback auf Ctrl+Enter. Fehler: {e}")
-                await self.page.keyboard.press("Control+Enter")
+            # Erzwinge Strg+Enter zum Absenden, um Run-Button-Limits zu umgehen
+            print("[AIStudioController] Druecke Strg+Enter zum Absenden...")
+            await self.page.keyboard.press("Control+Enter")
+
+            # Harte Wartezeit für massive 27k Prompts
+            print("[AIStudioController] Warte 15 Sekunden, damit AI Studio starten kann...")
+            await self.page.wait_for_timeout(15000)
         except Exception as e:
             print(f"[AIStudioController] Fehler beim Senden: {e}")
             await self.magic_touch_pause(10, "Konnte Prompt nicht eingeben oder absenden. Bitte manuell Run druecken!")
@@ -149,13 +153,24 @@ class AIStudioController:
                 f.write(html)
             return "Fehler: Kein Output gefunden. HTML wurde in temp/error_dump.html abgelegt."
 
-        # Wenn die Antwort aus Text + Code + Text besteht, holen wir uns alle Teile der Antwort:
-        # Da jede Session hier frisch ist, duerfen wir die gesammelten Chunks der letzten Nachricht zusammenbauen
-        result_parts = []
-        for v in md_viewers:
-            part = await v.inner_text()
-            result_parts.append(part)
-        
-        result = "\n".join(result_parts)
-        print(f"[AIStudioController] Erfolgreich {len(result)} Zeichen extrahiert!")
-        return result.strip()
+        print("[AIStudioController] Extrahiere sauberen Text per JS...")
+        try:
+            result = await self.page.evaluate('''() => {
+                const turns = document.querySelectorAll('message-content.model-turn');
+                if (turns.length === 0) return "";
+                const lastTurn = turns[turns.length - 1];
+                const textElements = lastTurn.querySelectorAll('p, li');
+                let text = "";
+                textElements.forEach(el => text += el.innerText + "\n");
+                return text.trim();
+            }''')
+
+            if not result:
+                result = (await self.page.evaluate("document.body.innerText"))[-500:]
+
+            print(f"[AIStudioController] Erfolgreich extrahiert ({len(result)} Zeichen).")
+            return result
+
+        except Exception as e:
+            print(f"[AIStudioController] Fehler beim Scrapen: {e}")
+            return "Fehler beim Lesen der Antwort."

@@ -10,11 +10,22 @@ import random
 
 app = FastAPI()
 
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    print(f"DEBUG: Incoming {request.method} to {request.url.path}")
+    response = await call_next(request)
+    print(f"DEBUG: Response status: {response.status_code}")
+    return response
+
 # Wir balancen aktuell nur zu Container 1 (8001), um visuell auf VNC (5901) zu debuggen
 PORTS = [8001]
 
 async def ask_browser_agent(prompt: str, model: str = "browser-agent-gemini") -> str:
-    port = random.choice(PORTS)
+    model_lower = model.lower()
+    if "aistudio" in model_lower or "gemini" in model_lower:
+        port = 8001
+    else:
+        port = random.choice(PORTS)
     url = f"http://localhost:{port}/sse"
     print(f"Versuche Container auf Port {port} zu erreichen per Modell {model}...")
 
@@ -27,14 +38,16 @@ async def ask_browser_agent(prompt: str, model: str = "browser-agent-gemini") ->
         # Initialisiere die MCP-Verbindung
         await session.initialize()
 
-        tool_name = "ask_gemini"
-        tool_args = {
-            "session_id": f"aider_{uuid.uuid4().hex[:8]}",
-            "prompt": prompt,
-            "model_name": "Gemini 3.1 Pro Preview"
-        }
-        
-        if "chatgpt" in model.lower():
+        model_lower = model.lower()
+        if "aistudio" in model_lower or "gemini" in model_lower:
+            tool_name = "ask_gemini"
+            target_port = 8001
+            tool_args = {
+                "session_id": f"aider_{uuid.uuid4().hex[:8]}",
+                "prompt": prompt,
+                "model_name": "Gemini 3.1 Pro Preview"
+            }
+        elif "chatgpt" in model_lower:
             tool_name = "ask_chatgpt"
             tool_args = {
                 "session_id": f"aider_{uuid.uuid4().hex[:8]}",
@@ -77,12 +90,37 @@ async def ask_browser_agent(prompt: str, model: str = "browser-agent-gemini") ->
             print(f"Proxy raw length received: {len(raw_text)}")
             return raw_text
 
-@app.post("/v1/chat/completions")
-async def chat_completions(request: Request):
+@app.get("/v1/models")
+@app.get("v1/models")  # Ohne Slash
+@app.get("/models")
+@app.api_route("/{path:path}", methods=["GET"])
+async def models_fallback(path: str = None):
+    if path and "models" in path:
+        return {"object": "list", "data": [{"id": "browser-agent-aistudio", "object": "model"}]}
+    return {"error": "not found"}
+
+@app.post("/{path:path}")
+async def final_catch_all(request: Request, path: str):
+    original_body = {}
     try:
-        body = await request.json()
-    except Exception:
-        body = {}
+        original_body = await request.json()
+    except Exception as e:
+        print(f"DEBUG: Fehler beim Parsen des Request-Body: {e}")
+
+    if "input" in original_body and "messages" not in original_body:
+        original_body["messages"] = original_body.pop("input")
+        print("DEBUG: Payload gemappt (input -> messages)")
+
+    print(f"🚀 Starte Browser-Logik für Pfad: {path}")
+    return await chat_completions(request, override_body=original_body)
+
+async def chat_completions(request: Request, override_body: dict = None):
+    body = override_body if override_body is not None else {}
+    if not body:
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
 
     messages = body.get("messages", [])
     if not messages:
@@ -102,26 +140,31 @@ async def chat_completions(request: Request):
         
     print(f"<-- Antwort vom Browser Agent empfangen (Länge: {len(browser_response)} Zeichen)")
 
+    # 1. Radikaler Response-Strip: Entferne alles, was identisch zum Prompt ist (falls Echo auftritt)
+    cleaned_response = browser_response
+    if browser_response.startswith(full_prompt):
+        cleaned_response = browser_response[len(full_prompt):].strip()
+        print(f"✂️ Echo entfernt. Neue Länge: {len(cleaned_response)} Zeichen")
+    
+    # 2. Debug-Print für OpenClaw
+    print(f"!!! SENDING TO OPENCLAW: {cleaned_response[:500]}...")
+
+    # 3. Exakter OpenAI JSON Standard
     return {
         "id": f"chatcmpl-{uuid.uuid4()}",
         "object": "chat.completion",
         "created": int(time.time()),
-        "model": body.get("model", "browser-agent-gemini"),
+        "model": "browser-agent-aistudio",
         "choices": [
             {
                 "index": 0,
                 "message": {
                     "role": "assistant",
-                    "content": browser_response
+                    "content": cleaned_response
                 },
                 "finish_reason": "stop"
             }
-        ],
-        "usage": {
-            "prompt_tokens": len(full_prompt) // 4, # grobe Schätzung
-            "completion_tokens": len(browser_response) // 4,
-            "total_tokens": (len(full_prompt) + len(browser_response)) // 4
-        }
+        ]
     }
 
 if __name__ == "__main__":

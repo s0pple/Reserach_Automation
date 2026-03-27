@@ -84,7 +84,8 @@ async def browser_worker_loop():
         print(f'[Worker] Task gepickt: Session {task.session_id} | {task.action}')
 
         try:
-            async with asyncio.timeout(90.0):
+            # 300 Sekunden Limit (5 Min) fuer manuelle Interaktion bei Cloudflare/Captchas
+            async with asyncio.timeout(300.0):
                 provider = task.model_provider if hasattr(task, 'model_provider') and task.model_provider else 'AI_STUDIO'
                 controller = await tab_registry.get_or_create_controller(task.session_id, provider)
                 await controller.page.bring_to_front()

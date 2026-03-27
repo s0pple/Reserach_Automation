@@ -14,7 +14,10 @@ class PerplexityController:
         """Navigiert auf die Seite und wartet, bis sie geladen ist."""
         print("[PerplexityController] Navigiere zu Perplexity...")
         await self.page.goto(self.url, wait_until="domcontentloaded")
-        await self.page.wait_for_timeout(3000)
+        
+        # WICHTIG: Cloudflare-Pause!
+        print("[PerplexityController] Warte 45 Sekunden auf manuellen Cloudflare-Check im VNC...")
+        await self.magic_touch_pause(45, "Bitte Cloudflare/Login jetzt loesen!")
         
         # Mögliche Popups/Welcome-Dialoge wegklicken!
         try:
@@ -52,27 +55,59 @@ class PerplexityController:
         pass
 
     async def send_prompt(self, prompt: str):
-        """Befuellt die Haupt-Eingabe und schickt den Befehl ab."""
+        """Befuellt die Haupt-Eingabe und schickt den Befehl ab. Mit User-Interaktion."""
         print("[PerplexityController] Sende Prompt...")
-        try:
-            # Suchen nach Textarea (Perplexity hat oft placeholder "Ask anything...")
-            prompt_box = self.page.locator("textarea").first
-            await prompt_box.click() # Fokussieren
-            await prompt_box.clear()
-            await prompt_box.fill(prompt)
-            await self.page.wait_for_timeout(1000)
-            
-            # Klicke explizit auf den Sende-Button
+        
+        # NEU: Magic Touch vor dem Senden, falls wir im VNC stehengeblieben sind
+        print("[PerplexityController] Warte 10 Sekunden, falls du im VNC die Box anklicken willst...")
+        await self.magic_touch_pause(10, "User-Interaktion vor Prompt-Eingabe erlaubt (Magic Touch).")
+
+        max_retries = 3
+        for attempt in range(max_retries):
             try:
-                print("[PerplexityController] Klicke definierten Sende-Button...")
-                # Suchen nach Sende-Button, meist ein Button direkt neben/unter der Textarea, der ein SVG/Icon enthaelt
-                await self.page.locator('button[aria-label="Submit"], button:has(svg.fa-arrow-right), button:has(svg)').last.click(timeout=3000)
+                # Suchen nach Textarea - beim ersten Versuch mehr Geduld (nach Cloudflare-Pause)
+                timeout_ms = 30000 if attempt == 0 else 5000
+                prompt_box = self.page.locator("textarea").first
+                
+                # Prüfen ob Box da ist, sonst Magic Touch
+                try:
+                    await prompt_box.wait_for(state="visible", timeout=timeout_ms)
+                except:
+                    print(f"[PerplexityController] Textarea nicht sichtbar (Versuch {attempt+1}). Pause für User...")
+                    await self.magic_touch_pause(20, "Textarea fehlt/verdeckt. Bitte im VNC fixen!")
+                
+                print("[PerplexityController] Versuche Text einzugeben...")
+                await prompt_box.click(timeout=5000)
+                await prompt_box.fill(prompt)
+                await self.page.wait_for_timeout(1000)
+                
+                # Senden
+                try:
+                    print("[PerplexityController] Klicke definierten Sende-Button...")
+                    await self.page.locator('button[aria-label="Submit"], button:has(svg.fa-arrow-right), button:has(svg)').last.click(timeout=3000)
+                except Exception:
+                    print(f"[PerplexityController] Sende-Button nicht gefunden, fallback auf Enter.")
+                    await self.page.keyboard.press("Enter")
+                
+                # Wenn wir hier sind, hat alles geklappt -> Raus aus der Schleife
+                return 
+
             except Exception as e:
-                print(f"[PerplexityController] Sende-Button nicht gefunden, fallback auf Enter. Fehler: {e}")
-                await self.page.keyboard.press("Enter")
-        except Exception as e:
-            print(f"[PerplexityController] Fehler beim Senden: {e}")
-            await self.magic_touch_pause(20, "Konnte Prompt nicht eingeben oder absenden. Bitte manuell absenden!")
+                print(f"[PerplexityController] Fehler beim Senden (Versuch {attempt+1}/{max_retries}): {e}")
+                
+                # Screenshot speichern fuer Debugging/VNC
+                debug_shot = f"temp/debug_perplexity_fail_{attempt}.png"
+                try:
+                    await self.page.screenshot(path=debug_shot)
+                    print(f"[PerplexityController] 📸 Screenshot gespeichert: {debug_shot}")
+                except:
+                    pass
+
+                if attempt < max_retries - 1:
+                    await self.magic_touch_pause(25, "Konnte Prompt nicht eingeben (Cloudflare?). Bitte fixen!")
+                    print("[PerplexityController] Starte erneuten Versuch...")
+                else:
+                    raise e
 
     async def wait_for_response(self, timeout_sec: int = 90) -> str:
         """

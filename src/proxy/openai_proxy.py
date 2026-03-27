@@ -150,8 +150,8 @@ async def chat_completions(request: Request, override_body: dict = None):
     print(f"!!! SENDING TO OPENCLAW: {cleaned_response[:500]}...")
 
     # 3. Exakter OpenAI JSON Standard
-    return {
-        "id": f"chatcmpl-{uuid.uuid4()}",
+    final_json = {
+        "id": f"chatcmpl-{int(time.time())}",
         "object": "chat.completion",
         "created": int(time.time()),
         "model": "browser-agent-aistudio",
@@ -164,8 +164,15 @@ async def chat_completions(request: Request, override_body: dict = None):
                 },
                 "finish_reason": "stop"
             }
-        ]
+        ],
+        "usage": {
+            "prompt_tokens": max(1, len(full_prompt) // 4),
+            "completion_tokens": max(1, len(cleaned_response) // 4),
+            "total_tokens": max(1, (len(full_prompt) + len(cleaned_response)) // 4)
+        }
     }
+    print(f"!!! SENDING TO OPENCLAW: {str(cleaned_response)[:150]}...")
+    return final_json
 
 if __name__ == "__main__":
     # Startet den Server auf Port 9002

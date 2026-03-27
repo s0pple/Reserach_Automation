@@ -1,6 +1,7 @@
 ﻿from typing import Optional
 from playwright.async_api import Page
 import asyncio
+import time
 
 class AIStudioController:
     """
@@ -85,31 +86,54 @@ class AIStudioController:
         await sys_box.fill(instructions)
 
     async def send_prompt(self, prompt: str):
-        """Befuellt die Haupt-Eingabe und schickt den Befehl ab."""
         print("[AIStudioController] Sende Prompt...")
         try:
-            # Die Prompt-Eingabe ist immer die absolute *letzte* Textarea auf der Seite
             prompt_box = self.page.locator("textarea").last
-            await prompt_box.click() # Fokussieren
+            await prompt_box.click()
             await prompt_box.clear()
-            # Schnelles Einfügen statt Tippen (für große Prompts)
             await prompt_box.fill(prompt)
-            # Stellen sicher, dass UI Events gefeuert werden
-            await prompt_box.evaluate("(el, value) => { el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); }", prompt)
             await self.page.wait_for_timeout(500)
-            
-            # Erzwinge Strg+Enter zum Absenden, um Run-Button-Limits zu umgehen
+
+            # Merke dir, wie viele KI-Antworten VOR dem Absenden existieren
+            self.turn_count_before = await self.page.locator(".model-turn").count()
+
             print("[AIStudioController] Druecke Strg+Enter zum Absenden...")
             await self.page.keyboard.press("Control+Enter")
-
-            # Harte Wartezeit für massive 27k Prompts
-            print("[AIStudioController] Warte 15 Sekunden, damit AI Studio starten kann...")
-            await self.page.wait_for_timeout(15000)
         except Exception as e:
             print(f"[AIStudioController] Fehler beim Senden: {e}")
-            await self.magic_touch_pause(10, "Konnte Prompt nicht eingeben oder absenden. Bitte manuell Run druecken!")
 
     async def wait_for_response(self, timeout_sec: int = 60) -> str:
+        print("[AIStudioController] Warte auf KI-Generierung...")
+        try:
+            start_time = time.time()
+
+            # 1. Warten, bis ein neuer Antwort-Block (.model-turn) erscheint
+            while time.time() - start_time < timeout_sec:
+                current_turns = await self.page.locator(".model-turn").count()
+                if current_turns > getattr(self, 'turn_count_before', 0):
+                    break
+                await self.page.wait_for_timeout(1000)
+
+            # 2. Generierung abwarten (10 Sekunden harter Puffer für den Textaufbau)
+            print("[AIStudioController] KI schreibt... warte 10 Sekunden...")
+            await self.page.wait_for_timeout(10000)
+
+            # 3. Nur den letzten Modell-Turn auslesen
+            model_turns = await self.page.locator(".model-turn").all()
+            if not model_turns:
+                return "Fehler: Kein .model-turn (KI-Antwort) gefunden."
+
+            text = await model_turns[-1].inner_text()
+
+            for bad_word in ["content_copy", "expand_less", "Markdown", "download", "Copy code"]:
+                text = text.replace(bad_word, "")
+
+            result = text.strip()
+            print(f"[AIStudioController] Erfolgreich extrahiert ({len(result)} Zeichen).")
+            return result
+        except Exception as e:
+            print(f"[AIStudioController] Fehler beim Scrapen: {e}")
+            return "Fehler beim Lesen der Antwort."
         """
         Wartet darauf, dass die Generierung abgeschlossen ist, und extrahiert den Text.
         """
@@ -133,44 +157,24 @@ class AIStudioController:
 
             await self.page.wait_for_timeout(1000)
 
-        # Antwort extrahieren: Wir kopieren ALLES aus den Output-Bloecken
-        print("[AIStudioController] Extrahiere Text...")
-        
-        # Waehle die typischen Text- oder Code-Komponenten von Gemini
-        md_viewers = await self.page.locator("ms-text-chunk, ms-code-block, ms-code-chunk").all()
-        if not md_viewers:
-            print("[AIStudioController] Warnung: Kein ms-text-chunk gefunden! Verusche generischen Fallback...")
-            # Fallback: Kompletten Chat-Text versuchen
-            all_text_elements = await self.page.locator("message-content").all()
-            if all_text_elements:
-                result = await all_text_elements[-1].inner_text()
-                print(f"[AIStudioController] Fallback extrahiert: {len(result)} Zeichen")
-                return result.strip()
-            
-            # Letzter Fallback
-            html = await self.page.content()
-            with open("temp/error_dump.html", "w", encoding="utf-8") as f:
-                f.write(html)
-            return "Fehler: Kein Output gefunden. HTML wurde in temp/error_dump.html abgelegt."
-
-        print("[AIStudioController] Extrahiere sauberen Text per JS...")
+        print("[AIStudioController] Extrahiere Text per nativem Locator...")
         try:
-            result = await self.page.evaluate('''() => {
-                const turns = document.querySelectorAll('message-content.model-turn');
-                if (turns.length === 0) return "";
-                const lastTurn = turns[turns.length - 1];
-                const textElements = lastTurn.querySelectorAll('p, li');
-                let text = "";
-                textElements.forEach(el => text += el.innerText + "\n");
-                return text.trim();
-            }''')
+            # Suche nach typischen Gemini-Textbausteinen
+            chunks = await self.page.locator("ms-text-chunk, markdown-viewer, .model-turn").all()
+            if chunks:
+                text = await chunks[-1].inner_text()
+            else:
+                # Fallback: Letzter Paragraph der Seite
+                paragraphs = await self.page.locator("p").all()
+                text = await paragraphs[-1].inner_text() if paragraphs else "Kein Text gefunden."
 
-            if not result:
-                result = (await self.page.evaluate("document.body.innerText"))[-500:]
+            # UI-Knöpfe aus dem Text wischen
+            for bad_word in ["content_copy", "expand_less", "Markdown", "download", "Copy code"]:
+                text = text.replace(bad_word, "")
 
+            result = text.strip()
             print(f"[AIStudioController] Erfolgreich extrahiert ({len(result)} Zeichen).")
             return result
-
         except Exception as e:
             print(f"[AIStudioController] Fehler beim Scrapen: {e}")
             return "Fehler beim Lesen der Antwort."

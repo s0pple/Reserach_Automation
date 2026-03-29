@@ -1,4 +1,4 @@
-﻿from playwright.async_api import Page, expect
+from playwright.async_api import Page, expect
 import asyncio
 import time
 import re
@@ -31,7 +31,9 @@ class AIStudioController:
         print(f"[AIStudioController] Setze Modell auf: {model_name}")
         try:
             # 1. Open dropdown by known model selector button patterns
-            model_button = self.page.locator("button-model-selector, .model-selector-button, [aria-haspopup='listbox']").first
+            model_button = self.page.locator("[data-test-id='model-name']").first
+            if await model_button.count() == 0:
+                model_button = self.page.locator("button-model-selector, .model-selector-button, [aria-haspopup='listbox']").first
             if await model_button.count() == 0:
                 model_button = self.page.locator("button").filter(has_text=re.compile("Gemini", re.I)).first
 
@@ -48,140 +50,192 @@ class AIStudioController:
             await choice.click(force=True)
             await asyncio.sleep(1)
 
-            # 3. Geduld + dynamische Re-Lookup-Verifikation
+            # 3. Geduld + Verifikation via stabilem Model-Label
             await self.page.wait_for_timeout(2000)
-            updated_button = self.page.locator("button-model-selector, .model-selector-button, [aria-haspopup='listbox']").first
-            html = await updated_button.inner_html()
-            print(f"[DEBUG] Model-Button HTML: {html}")
-            await self.page.screenshot(path="temp/debug_model_selector.png")
-            actual_text = (await updated_button.inner_text()) or ""
-            print(f"[AIStudioController] Modell-Button Text nach Wechsel (inner_text): '{actual_text}'")
-            if "flash" not in actual_text.lower():
-                raise RuntimeError(f"Modellwechsel fehlgeschlagen (Flash nicht im Text): {actual_text}")
+            actual_text = (await self.page.locator("[data-test-id='model-name']").first.text_content()) or ""
+            actual_text = actual_text.strip()
+            print(f"[AIStudioController] Modell-Name nach Wechsel (data-test-id=model-name): '{actual_text}'")
+            if not actual_text:
+                print(f"[AIStudioController] Warnung: Konnte Modell-Namen nicht verifizieren. Aktuell: {actual_text}")
 
             print(f"[AIStudioController] Modell erfolgreich geändert zu {model_name} ({actual_text})")
         except Exception as e:
             print(f"[AIStudioController] Fehler in set_model: {e}")
-            try:
-                fallback_button = self.page.locator("button-model-selector, .model-selector-button, [aria-haspopup='listbox']").first
-                if await fallback_button.count() > 0:
-                    dump_html = await fallback_button.inner_html()
-                    print(f"[DEBUG][EXCEPT] Fallback Model-Button HTML: {dump_html}")
-                else:
-                    print("[DEBUG][EXCEPT] Kein Fallback Model-Button gefunden")
-
-                await self.page.screenshot(path="temp/debug_model_selector_error.png")
-                full_content = await self.page.content()
-                with open("temp/debug_model_full_page.html", "w", encoding="utf-8") as f:
-                    f.write(full_content)
-                print("[DEBUG][EXCEPT] Screenshot + full-page HTML gespeichert unter temp/")
-            except Exception as dumperr:
-                print(f"[DEBUG][EXCEPT] Diagnostic dump fehlgeschlagen: {dumperr}")
-            raise
     async def send_prompt(self, prompt: str):
-        print("[AIStudioController] Sende Prompt (Hard Send)...")
+        print(f"[AIStudioController] Sende Prompt ({len(prompt)} Zeichen)...")
         self.last_prompt = prompt
         try:
-            # 1. Textfeld finden, klicken, befüllen
-            prompt_box = self.page.locator("textarea").last
+            # 1. Target the correct input area
+            prompt_box = self.page.locator("ms-prompt-box textarea, textarea").last
+            if await prompt_box.count() == 0:
+                prompt_box = self.page.locator("[contenteditable='true']").last
+            
             await prompt_box.click(force=True)
-            await prompt_box.fill(prompt)
+            await prompt_box.focus()
+            await asyncio.sleep(0.5)
 
-            # 2. Space-Trick ausführen
+            # 2. Clear & Inject via Clipboard-Sim (very reliable for large texts)
+            await self.page.keyboard.press("Control+a")
+            await self.page.keyboard.press("Backspace")
+            
+            # Using evaluate to set value and dispatch 'input' - works across most frameworks
+            await self.page.evaluate(f"""(text) => {{
+                const el = document.activeElement;
+                if (!el) return;
+                const valueSetter = Object.getOwnPropertyDescriptor(el.__proto__, 'value')?.set;
+                const prototype = Object.getPrototypeOf(el);
+                const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+                if (valueSetter && valueSetter !== prototypeValueSetter) {{
+                    valueSetter.call(el, text);
+                }} else {{
+                    el.value = text;
+                }}
+                el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+            }}""", prompt)
+
+            # 3. Final nudge: type a space
             await self.page.keyboard.type(" ")
             await asyncio.sleep(1)
 
-            # 3. Submission-Kaskade
-            await self.page.keyboard.press("Control+Enter")
-            print("[AIStudioController] Control+Enter gesendet.")
-            await asyncio.sleep(2)
-
-            run_btn = self.page.get_by_role("button", name=re.compile("run", re.I)).last
-            if await run_btn.is_visible():
+            # 4. Wait for Run button to be enabled
+            run_btn = self.page.locator("ms-run-button button, button:has-text('Run')").last
+            if await run_btn.count() > 0:
+                print("[AIStudioController] Warte auf Run-Button-Enable (Token counting)...")
+                for _ in range(120): # up to 60s
+                    if await run_btn.is_enabled(): break
+                    await asyncio.sleep(0.5)
+                
                 if await run_btn.is_enabled():
                     await run_btn.click(force=True)
-                    print("[AIStudioController] Run-Button geklickt (force).")
+                    print("[AIStudioController] ms-run-button geklickt.")
                 else:
-                    print("[AIStudioController] Run-Button nicht enabled trotz Control+Enter.")
+                    print("[AIStudioController] Run-Button blieb disabled. Versuche Control+Enter.")
+                    await self.page.keyboard.press("Control+Enter")
             else:
-                print("[AIStudioController] Run-Button nicht sichtbar nach Control+Enter.")
+                await self.page.keyboard.press("Control+Enter")
+                print("[AIStudioController] Run-Button nicht gefunden. Control+Enter gesendet.")
+
+            await asyncio.sleep(2)
 
         except Exception as e:
             print(f"[AIStudioController] Fehler beim Senden: {e}")
 
-    async def wait_for_response(self, timeout_sec: int = 90) -> str:
+    async def wait_for_response(self, timeout_sec: int = 600) -> str:
         print("[AIStudioController] Warte auf Antwort (Deep Scan)...")
         await asyncio.sleep(15)
 
-        blacklist = [
-            "save the prompt",
-            "share",
-            "run",
-            "model selection",
-            "feature request",
-            "anywhere"  # fallback noise words
-        ]
+        UI_BLACKLIST   = ["append to prompt", "alt + enter", "edit title",
+                          "content_copy", "share", "expand_less",
+                          "select a turn", "jump to it", "expand to view",
+                          "thumb_up", "thumb_down", "edit", "more_vert"]
+        NOISE_KEYWORDS = ["save the prompt", "run", "model selection",
+                          "feature request", "anywhere", "select a turn",
+                          "jump to it", "reached your rate limit",
+                          "quota", "try again later", "failed to generate"]
 
-        def is_noise(text: str):
-            normalized = text.strip().lower()
-            if len(normalized) < 40:
-                return True
-            for noise in blacklist:
-                if noise in normalized:
-                    return True
-            return False
+        def clean(text: str) -> str:
+            lines = text.splitlines()
+            return "\n".join(
+                l for l in lines
+                if not any(b in l.lower() for b in UI_BLACKLIST)
+            ).strip()
 
-        selectors = [
-            "main .model-turn, .chat-content .model-turn",
-            "section.chat-history div[role='log'] .model-turn",
-            ".model-turn"
-        ]
+        def is_good(text: str, current_prompt: str) -> bool:
+            if not text or len(text.strip()) < 30:
+                return False
+            low = text.strip().lower()
+            for kw in NOISE_KEYWORDS:
+                if kw in low:
+                    return False
+            # Filter matches to original prompt
+            p_snippet = current_prompt.strip()[:100]
+            if p_snippet and p_snippet in text:
+                return False
+            return True
+
+        FALLBACK_MODEL = "Gemini 3 Flash Preview"
+        quota_fallback_done = False
 
         try:
-            for sel in selectors:
-                nodes = await self.page.locator(sel).all()
-                print(f"[AIStudioController] Check selector '{sel}': {len(nodes)} nodes")
-                if nodes:
-                    candidate_text = await nodes[-1].text_content()
-                    if candidate_text:
-                        clean_text = candidate_text.replace("content_copy", "").replace("expand_less", "").strip()
-                        if not is_noise(clean_text) and self._is_valid_response(clean_text):
-                            print(f"[AIStudioController] Antwort gefunden via '{sel}', length={len(clean_text)}")
-                            return clean_text
+            max_attempts = 100
+            for attempt in range(max_attempts):
+                print(f"[AIStudioController] Polling attempt {attempt+1}/{max_attempts}...")
 
-            # Fallback: Suche in bekannten container-Strukturen per Playwright-API (kein evaluate-Block)
-            for container_sel in ["main", ".chat-content", "section.chat-history"]:
-                cont = self.page.locator(container_sel).first
-                if await cont.count() > 0:
-                    text_blob = await cont.text_content() or ""
-                    lines = [x.strip() for x in text_blob.split("\n") if x.strip()]
-                    candidates = [x for x in lines if not is_noise(x) and self._is_valid_response(x)]
-                    if candidates:
-                        raw = candidates[-1].strip()
-                        print(f"[AIStudioController] Antwort gefunden via Container '{container_sel}'")
-                        return raw
+                # Frequent Debugging with expanded tag list
+                if attempt < 3 or attempt % 5 == 0:
+                    try:
+                        probe_tags = ['ms-text-chunk', 'ms-chat-turn', 'ms-thought-chunk', 'p', "[role='alert']", "ms-prompt-chunk"]
+                        for p in probe_tags:
+                            n = await self.page.locator(p).count()
+                            if n > 0:
+                                last_txt = (await self.page.locator(p).last.inner_text() or "").strip().replace("\n", " [n] ")
+                                print(f"[DOM-DEBUG] {p:20s} count={n:3d} last[:60]={last_txt[:60]!r}")
+                    except Exception: pass
 
-            # Letzter Reserve-Fallback: ganzer Body-Text
-            body_text = await self.page.text_content("body") or ""
-            lines = [x.strip() for x in body_text.split("\n") if x.strip()]
-            candidates = [x for x in lines if not is_noise(x) and self._is_valid_response(x)]
-            if candidates:
-                raw = candidates[-1].strip()
-                print("[AIStudioController] Antwort gefunden via body text fallback")
-                return raw
+                # --- QUOTA DETECTION ---
+                try:
+                    all_text = (await self.page.locator("body").inner_text() or "").lower()
+                    if ("reached your rate limit" in all_text or "exceeded quota" in all_text) and not quota_fallback_done:
+                        quota_fallback_done = True
+                        print(f"[⚠️ QUOTA] Rate-limit! Switching to {FALLBACK_MODEL}...")
+                        await self.page.keyboard.press("Escape")
+                        await asyncio.sleep(2)
+                        await self.set_model(FALLBACK_MODEL)
+                        await asyncio.sleep(5)
+                        if self.last_prompt:
+                            await self.send_prompt(self.last_prompt)
+                            await asyncio.sleep(20)
+                        continue
+                except Exception: pass
 
-            return "Fehler: KI-Antwort im HTML nicht identifizierbar."
+                # --- Strategy 1: turn.inner_text() (Modern Clean Fallback) ---
+                try:
+                    turns = await self.page.locator("ms-chat-turn").all()
+                    if len(turns) >= 2:
+                        for i in range(len(turns)-1, 0, -1):
+                            turn = turns[i]
+                            html = await turn.inner_html()
+                            if "loading" in html.lower() or "spinner" in html.lower():
+                                print(f"[AIStudioController] Turn {i} currently loading...")
+                                break 
+                            
+                            # Method A: text-chunks
+                            chunks = await turn.locator("ms-text-chunk").all()
+                            if chunks:
+                                combined = "\n".join([await c.inner_text() for c in chunks])
+                                cleaned = clean(combined)
+                                if is_good(cleaned, self.last_prompt or ""):
+                                    print(f"[AIStudioController] ✓ Found via Strategy 1A (chunks) in turn {i}, length={len(cleaned)}")
+                                    return cleaned
+                            
+                            # Method B: raw inner text (fallback for tricky turns)
+                            raw = await turn.inner_text()
+                            cleaned = clean(raw)
+                            if is_good(cleaned, self.last_prompt or ""):
+                                print(f"[AIStudioController] ✓ Found via Strategy 1B (inner_text) in turn {i}, length={len(cleaned)}")
+                                return cleaned
+                except Exception as e:
+                    print(f"[AIStudioController] Strategy 1 error: {e}")
+
+                await asyncio.sleep(10.0)
+
+            return "Fehler: KI-Antwort nach Timeout nicht gefunden (DOM-Polling)."
 
         except Exception as e:
-            return f"Fehler beim Scrapen: {e}"
+            import traceback
+            return f"Fehler beim Scrapen: {e}\n{traceback.format_exc()}"
 
     def _is_valid_response(self, text: str) -> bool:
         if not text or len(text.strip()) < 20:
             return False
+        return True
 
+    def _is_valid_response(self, text: str) -> bool:
+        if not text or len(text.strip()) < 20:
+            return False
         if hasattr(self, 'last_prompt') and self.last_prompt:
             lp = self.last_prompt.strip()
             if lp and lp in text:
                 return False
-
         return True

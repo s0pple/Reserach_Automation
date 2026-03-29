@@ -75,6 +75,15 @@ async def ask_browser_agent(prompt: str, model: str = "browser-agent-gemini") ->
                 "prompt": prompt,
                 "model_name": "Perplexity"
             }
+        else:
+            # Fallback for generic names like gpt-4o
+            print(f"DEBUG: Unknown model mapping for '{model}', falling back to Gemini")
+            tool_name = "ask_gemini"
+            tool_args = {
+                "session_id": f"aider_{uuid.uuid4().hex[:8]}",
+                "prompt": prompt,
+                "model_name": "Gemini 3.1 Pro Preview"
+            }
 
         # Führe das KI-Studio-Tool aus
         result = await session.call_tool(tool_name, tool_args)
@@ -136,6 +145,8 @@ async def chat_completions(request: Request, override_body: dict = None):
     try:
         browser_response = await ask_browser_agent(full_prompt, model=model_name)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         browser_response = f"Proxy Interner Fehler: {str(e)}"
         
     print(f"<-- Antwort vom Browser Agent empfangen (Länge: {len(browser_response)} Zeichen)")

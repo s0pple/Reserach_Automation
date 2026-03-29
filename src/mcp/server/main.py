@@ -109,124 +109,195 @@ tab_registry = TabRegistry()
 async def browser_worker_loop():
     print('?? [Worker] Maus-Gott Loop gestartet...')
     while True:
-        task: BrowserTask = await task_queue.get()
-        print(f'[Worker] Task gepickt: Session {task.session_id} | {task.action}')
-
         try:
-            # 300 Sekunden Limit (5 Min) fuer manuelle Interaktion bei Cloudflare/Captchas
-            async with asyncio.timeout(300.0):
-                provider = task.model_provider if hasattr(task, 'model_provider') and task.model_provider else 'AI_STUDIO'
-                controller = await tab_registry.get_or_create_controller(task.session_id, provider)
-                await controller.page.bring_to_front()
-                await controller.page.wait_for_timeout(500)
+            task: BrowserTask = await task_queue.get()
+            print(f'[Worker] Task gepickt: Session {task.session_id} | {task.action}')
 
-                if task.action == 'generate':
-                    if hasattr(controller, 'set_model') and task.model_name and provider == 'AI_STUDIO':
-                        await controller.set_model(task.model_name)
-                    
-                    await controller.send_prompt(task.prompt)
-                    response = await controller.wait_for_response()
-                    task.future.set_result(response)
-                else:
-                    raise ValueError(f'Unbekannte Aktion: {task.action}')
+            try:
+                # 10 Minuten Limit (600s) fuer manuelle Interaktion und lange Scans
+                async with asyncio.timeout(600.0):
+                    provider = task.model_provider if hasattr(task, 'model_provider') and task.model_provider else 'AI_STUDIO'
+                    controller = await tab_registry.get_or_create_controller(task.session_id, provider)
+                    await controller.page.bring_to_front()
+                    await controller.page.wait_for_timeout(500)
 
-        except TimeoutError:
-            err_msg = f'Timeout (> 90s) fuer Session: {task.session_id}.'
-            print(err_msg)
-            task.future.set_exception(Exception(err_msg))
-        except Exception as e:
-            print(f'Fehler: {e}')
-            task.future.set_exception(e)
-        finally:
-            print(f'Task fuer Session {task.session_id} beendet. Lock frei.')
-            task_queue.task_done()
+                    if task.action == 'generate':
+                        if hasattr(controller, 'set_model') and task.model_name and provider == 'AI_STUDIO':
+                            await controller.set_model(task.model_name)
+                        
+                        await controller.send_prompt(task.prompt)
+                        response = await controller.wait_for_response()
+                        if not task.future.done():
+                            task.future.set_result(response)
+                    else:
+                        raise ValueError(f'Unbekannte Aktion: {task.action}')
+
+            except asyncio.TimeoutError:
+                err_msg = f'Timeout (> 10 Min) fuer Session: {task.session_id}.'
+                print(err_msg)
+                if not task.future.done():
+                    task.future.set_exception(Exception(err_msg))
+            except Exception as e:
+                print(f'Fehler im Task: {e}')
+                if not task.future.done():
+                    task.future.set_exception(e)
+            except BaseException as e:
+                import traceback
+                print(f'[Worker] Task BaseException caught: {e}')
+                traceback.print_exc()
+                if not task.future.done():
+                    task.future.set_exception(Exception(f"Worker BaseException: {str(e)}"))
+            finally:
+                print(f'Task fuer Session {task.session_id} beendet. Lock frei.')
+                task_queue.task_done()
+        except BaseException as loop_err:
+            import traceback
+            print(f"[Worker] Fatal Loop Error: {loop_err}")
+            traceback.print_exc()
+            await asyncio.sleep(1)
 
 mcp = FastMCP('Browser-Hub-God-Container')
 
 @mcp.tool()
-async def ask_gemini(session_id: str, prompt: str, model_name: str = 'Gemini 3.1 Pro Preview') -> str:
-    loop = asyncio.get_running_loop()
-    future = loop.create_future()
-    queue_pos = task_queue.qsize()
-    print(f'[MCP] Task fuer {session_id} auf pos {queue_pos}')
-
-    task = BrowserTask(
-        session_id=session_id, action='generate', prompt=prompt,
-        model_name=model_name, model_provider='AI_STUDIO', future=future
-    )
-    await task_queue.put(task)
+async def debug_page(session_id: str) -> str:
+    """Diagnose-Tool: Gibt URL + Selector-Counts der aktuellen Browser-Seite zurück."""
     try:
+        if not tab_registry.context or not tab_registry.context.pages:
+            return "Kein Browser-Context aktiv."
+        page = tab_registry.context.pages[0]
+        url = page.url
+
+        selectors = [
+            ".model-turn", "model-turn", "ms-text-chunk", "ms-chat-turn",
+            ".message-content", "message-content", "[class*='model']",
+            "section.chat-history", "chat-history", "ms-prompt-chunk",
+            ".response-content", "mat-expansion-panel", "rich-text-editor",
+            "p", "h1", "h2", "h3"
+        ]
+
+        results = [f"URL: {url}"]
+        for sel in selectors:
+            try:
+                count = await page.locator(sel).count()
+                results.append(f"  [{count:3d}] {sel}")
+            except Exception as e:
+                results.append(f"  [ERR] {sel}: {e}")
+
+        # Custom element tags
+        custom_tags = await page.evaluate("""() => {
+            const tags = new Set();
+            document.querySelectorAll('*').forEach(el => tags.add(el.tagName.toLowerCase()));
+            return [...tags].filter(t => t.includes('-')).sort();
+        }""")
+        results.append(f"\nCustom Elements ({len(custom_tags)}):")
+        results.extend([f"  <{t}>" for t in custom_tags[:40]])
+
+        return "\n".join(results)
+    except Exception as e:
+        import traceback
+        return f"debug_page error: {e}\n{traceback.format_exc()}"
+
+
+@mcp.tool()
+async def ask_gemini(session_id: str, prompt: str, model_name: str = 'Gemini 3.1 Pro Preview') -> str:
+    try:
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        queue_pos = task_queue.qsize()
+        print(f'[MCP] Task fuer {session_id} auf pos {queue_pos}')
+
+        task = BrowserTask(
+            session_id=session_id, action='generate', prompt=prompt,
+            model_name=model_name, model_provider='AI_STUDIO', future=future
+        )
+        await task_queue.put(task)
         return await future
     except Exception as e:
+        import traceback
+        print(f"[ask_gemini] Exception caught: {e}")
+        traceback.print_exc()
         return f'Worker failed: {str(e)}'
+    except BaseException as e:
+        import traceback
+        print(f"[ask_gemini] BaseException caught (TaskGroup crash prevent): {e}")
+        traceback.print_exc()
+        return f'Critical task failure: {str(e)}'
 
 @mcp.tool()
 async def ask_chatgpt(session_id: str, prompt: str, model_name: str = 'ChatGPT') -> str:
-    loop = asyncio.get_running_loop()
-    future = loop.create_future()
-    queue_pos = task_queue.qsize()
-    print(f'[MCP] Task fuer {session_id} (ChatGPT) auf pos {queue_pos}')
-
-    task = BrowserTask(
-        session_id=session_id, action='generate', prompt=prompt,
-        model_name=model_name, model_provider='CHATGPT', future=future
-    )
-    await task_queue.put(task)
     try:
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        queue_pos = task_queue.qsize()
+        print(f'[MCP] Task fuer {session_id} (ChatGPT) auf pos {queue_pos}')
+
+        task = BrowserTask(
+            session_id=session_id, action='generate', prompt=prompt,
+            model_name=model_name, model_provider='CHATGPT', future=future
+        )
+        await task_queue.put(task)
         return await future
     except Exception as e:
         return f'Worker failed: {str(e)}'
+    except BaseException as e:
+        return f'Critical task failure: {str(e)}'
 
 @mcp.tool()
 async def ask_claude(session_id: str, prompt: str, model_name: str = 'Claude') -> str:
-    loop = asyncio.get_running_loop()
-    future = loop.create_future()
-    queue_pos = task_queue.qsize()
-    print(f'[MCP] Task fuer {session_id} (Claude) auf pos {queue_pos}')
-
-    task = BrowserTask(
-        session_id=session_id, action='generate', prompt=prompt,
-        model_name=model_name, model_provider='CLAUDE', future=future
-    )
-    await task_queue.put(task)
     try:
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        queue_pos = task_queue.qsize()
+        print(f'[MCP] Task fuer {session_id} (Claude) auf pos {queue_pos}')
+
+        task = BrowserTask(
+            session_id=session_id, action='generate', prompt=prompt,
+            model_name=model_name, model_provider='CLAUDE', future=future
+        )
+        await task_queue.put(task)
         return await future
     except Exception as e:
         return f'Worker failed: {str(e)}'
+    except BaseException as e:
+        return f'Critical task failure: {str(e)}'
 
 @mcp.tool()
 async def ask_deepseek(session_id: str, prompt: str, model_name: str = 'DeepSeek') -> str:
-    loop = asyncio.get_running_loop()
-    future = loop.create_future()
-    queue_pos = task_queue.qsize()
-    print(f'[MCP] Task fuer {session_id} (DeepSeek) auf pos {queue_pos}')
-
-    task = BrowserTask(
-        session_id=session_id, action='generate', prompt=prompt,
-        model_name=model_name, model_provider='DEEPSEEK', future=future
-    )
-    await task_queue.put(task)
     try:
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        queue_pos = task_queue.qsize()
+        print(f'[MCP] Task fuer {session_id} (DeepSeek) auf pos {queue_pos}')
+
+        task = BrowserTask(
+            session_id=session_id, action='generate', prompt=prompt,
+            model_name=model_name, model_provider='DEEPSEEK', future=future
+        )
+        await task_queue.put(task)
         return await future
     except Exception as e:
         return f'Worker failed: {str(e)}'
+    except BaseException as e:
+        return f'Critical task failure: {str(e)}'
 
 @mcp.tool()
 async def ask_perplexity(session_id: str, prompt: str, model_name: str = 'Perplexity') -> str:
-    loop = asyncio.get_running_loop()
-    future = loop.create_future()
-    queue_pos = task_queue.qsize()
-    print(f'[MCP] Task fuer {session_id} (Perplexity) auf pos {queue_pos}')
-
-    task = BrowserTask(
-        session_id=session_id, action='generate', prompt=prompt,
-        model_name=model_name, model_provider='PERPLEXITY', future=future
-    )
-    await task_queue.put(task)
     try:
+        loop = asyncio.get_running_loop()
+        future = loop.create_future()
+        queue_pos = task_queue.qsize()
+        print(f'[MCP] Task fuer {session_id} (Perplexity) auf pos {queue_pos}')
+
+        task = BrowserTask(
+            session_id=session_id, action='generate', prompt=prompt,
+            model_name=model_name, model_provider='PERPLEXITY', future=future
+        )
+        await task_queue.put(task)
         return await future
     except Exception as e:
         return f'Worker failed: {str(e)}'
+    except BaseException as e:
+        return f'Critical task failure: {str(e)}'
 
 app = FastAPI()
 

@@ -36,7 +36,7 @@ def test_proxy_connection():
     """Test if proxy is accessible"""
     print_step(1, "Testing proxy connection...")
     try:
-        response = requests.get("http://localhost:9002/v1/models", timeout=5)
+        response = requests.get("http://127.0.0.1:9002/v1/models", timeout=5)
         if response.status_code == 200:
             print_success("Proxy is running on port 9002")
             return True
@@ -58,7 +58,7 @@ def test_ai_studio_submission():
     """Test AI Studio prompt submission"""
     print_step(2, "Testing AI Studio submission logic...")
     
-    url = "http://localhost:9002/v1/responses"
+    url = "http://127.0.0.1:9002/v1/responses"
     payload = {
         "input": [
             {

@@ -31,8 +31,23 @@ class TabRegistry:
         self.playwright = None
         self.context = None
         self.controllers: Dict[str, Any] = {}
-        self.max_tabs = 3
+        self.max_tabs = 1
         self.account_id = os.getenv('ACCOUNT_ID', 'default_acc')
+
+    async def _ensure_single_tab(self):
+        if not self.context:
+            return
+
+        pages = self.context.pages
+        while len(pages) > 1:
+            print(f"[TabRegistry] Schließe überschüssige Seite ({len(pages)} insgesamt)")
+            await pages[-1].close()
+            pages = self.context.pages
+
+        if len(pages) == 0:
+            print("[TabRegistry] Keine Seite offen, erzeuge neue Seite")
+            await self.context.new_page()
+
 
     async def get_or_create_controller(self, session_id: str, provider: str = 'AI_STUDIO') -> Any:
         if not self.playwright:
@@ -48,8 +63,22 @@ class TabRegistry:
                 args=['--disable-blink-features=AutomationControlled', '--no-sandbox', '--disable-dev-shm-usage']
             )
 
+        await self._ensure_single_tab()
+
         if session_id in self.controllers:
             return self.controllers[session_id]
+
+        if len(self.controllers) >= self.max_tabs:
+            print(f'[TabRegistry] RAM-Schutz: Entferne alte Controller (aktuell {len(self.controllers)})')
+            for old_session, old_controller in list(self.controllers.items()):
+                try:
+                    await old_controller.page.close()
+                except Exception as e:
+                    print(f"[TabRegistry] Fehler beim Schliessen alter Seite: {e}")
+                self.controllers.pop(old_session, None)
+
+        # Falls mehr als 1 Page im Context ist, bereinigen
+        await self._ensure_single_tab()
 
         if len(self.controllers) >= self.max_tabs:
             raise RuntimeError(f'RAM-Schutz aktiv. Maximum {self.max_tabs} erreicht.')

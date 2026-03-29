@@ -1,0 +1,72 @@
+# IMMEDIATE ACTION: Execute Test
+
+## ✅ What's Done
+- Phase 1: Code updated with SPA state-aware submission logic
+- Ready for: Phase 2 (Docker restart) & Phase 3 (Test)
+
+## 🚀 How to Execute (Simple)
+
+**Open Command Prompt and run:**
+```cmd
+cd E:\TEST_SYNC\10_projekte_dashboard\10.1_aktiv\Research_Automation
+RUN_TEST.bat
+```
+
+This will:
+1. Restart the Docker container
+2. Wait for it to boot (15 seconds)
+3. Send a test prompt to the AI Studio
+4. Display the response
+
+## 📊 Expected Results
+
+### ✅ SUCCESS
+You'll see JSON output containing text about Venture Capital. Example:
+```json
+{
+  "choices": [{
+    "message": {
+      "content": "Venture Capital ist Investitionskapital von professionellen Investoren, die es in Startups mit hohem Wachstumspotenzial investieren."
+    }
+  }]
+}
+```
+
+### ❌ FAILURE
+You'll see one of these errors:
+- `Fehler: Kein .model-turn (KI-Antwort) gefunden.` 
+  → Submission failed, need to debug
+- Connection error 
+  → Docker not running or proxy not accessible
+- Timeout
+  → Container didn't start in time
+
+## 🔍 Debugging (If Needed)
+
+### See what's happening visually:
+```
+VNC Viewer → localhost:5901
+```
+(This shows the browser in real-time)
+
+### See error messages:
+```bash
+docker logs -f mcp_gemini_1
+```
+(Look for lines starting with `[AIStudioController]`)
+
+## 📁 Key Files Modified
+
+- `src/core/ai_studio_controller.py` - send_prompt() method
+
+## 📝 Technical Summary
+
+**Problem**: Playwright .fill() doesn't trigger React event listeners
+**Solution**: Simulate keystroke to trigger onChange → enables button → click works
+**Phases**:
+1. ✅ Code updated
+2. ⏳ Run: `RUN_TEST.bat`
+
+---
+
+**NEXT STEP**: Execute `RUN_TEST.bat` and report the results!

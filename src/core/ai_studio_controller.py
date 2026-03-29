@@ -2,16 +2,27 @@ from playwright.async_api import Page, expect
 import asyncio
 import time
 import re
+import os
 
 class AIStudioController:
-    def __init__(self, page: Page):
+    def __init__(self, page: Page, request_id: str = "N/A"):
         self.page = page
+        self.request_id = request_id
         self.url = "https://aistudio.google.com/app/prompts/new_chat"
 
+    def log_event(self, event_name: str, **kwargs):
+        import json
+        payload = {
+            "event": event_name,
+            "request_id": self.request_id,
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            **kwargs
+        }
+        print(f"[EVENT] {json.dumps(payload)}")
+
     async def init_session(self):
-        print("[AIStudioController] Navigiere zu AI Studio...")
-        await self.page.goto(self.url, wait_until="networkidle")
-        await asyncio.sleep(5)
+        self.log_event("SESSION_INIT_STARTED")
+        await asyncio.sleep(1)
 
         # 0. Optional: Seitenleiste schließen, falls angezeigt
         try:
@@ -61,6 +72,70 @@ class AIStudioController:
             print(f"[AIStudioController] Modell erfolgreich geändert zu {model_name} ({actual_text})")
         except Exception as e:
             print(f"[AIStudioController] Fehler in set_model: {e}")
+
+    async def ensure_fresh_chat(self):
+        """Hard reset via direct URL navigation to ensure a stateless environment."""
+        self.log_event("NEW_CHAT_REQUESTED", url=self.url)
+        
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                # 1. Open URL
+                self.log_event("NEW_CHAT_REQUESTED", url=self.url)
+                await self.page.goto(self.url, wait_until="domcontentloaded", timeout=60000)
+                await asyncio.sleep(2)
+
+                # 2. Hard Ready-Check: Wait for prompt-box to be interactive
+                prompt_box = self.page.locator("ms-prompt-box textarea").first
+                try:
+                    await prompt_box.wait_for(state="visible", timeout=30000)
+                    # Ensure it's not disabled (AI Studio sometimes overlays while loading)
+                    for _ in range(20):
+                        if await prompt_box.is_enabled():
+                            break
+                        await asyncio.sleep(0.5)
+                except Exception as e:
+                    self.log_event("READY_CHECK_FAILED", error=str(e))
+                    raise RuntimeError("Prompt-Box not interactive after 30s.")
+
+                # 3. Clean-Verify: Paranoiac DOM validation
+                # Check for any visible chat turns or markdown results
+                bad_selectors = ["ms-chat-turn", "markdown-viewer", ".model-turn", ".message-content"]
+                dirty_elements = 0
+                for sel in bad_selectors:
+                    locs = await self.page.locator(sel).all()
+                    for loc in locs:
+                        if await loc.is_visible():
+                            dirty_elements += 1
+                
+                # Check textarea specifically
+                prompt_box = self.page.locator("ms-prompt-box textarea, textarea").last
+                text_val = await prompt_box.input_value() if await prompt_box.count() > 0 else "MISSING"
+                
+                if dirty_elements == 0 and (text_val == "" or text_val == "MISSING"):
+                    self.log_event("NEW_CHAT_VERIFIED", status="CLEAN", attempt=attempt+1)
+                    return
+                else:
+                    self.log_event("NEW_CHAT_DIRTY", elements=dirty_elements, text_length=len(text_val), attempt=attempt+1)
+                    await self.page.reload(wait_until="networkidle")
+                    await asyncio.sleep(3)
+            except Exception as e:
+                self.log_event("NEW_CHAT_ERROR", error=str(e), attempt=attempt+1)
+                await asyncio.sleep(1)
+
+        self.log_event("FATAL_STATE_DIRTY", action="HALT")
+        raise RuntimeError("Unrecoverable State Dirty: Could not clear AI Studio session after 3 retries.")
+
+    async def check_immediate_quota(self):
+        """Fast check for quota banner right after loading."""
+        try:
+            all_text = (await self.page.locator("body").inner_text() or "").lower()
+            if "reached your rate limit" in all_text or "exceeded quota" in all_text:
+                self.log_event("QUOTA_FALLBACK_TRIGGERED", trigger="immediate_load")
+                await self.set_model("Gemini 1.5 Flash")
+                await asyncio.sleep(2)
+        except Exception as e:
+            self.log_event("QUOTA_CHECK_ERROR", error=str(e))
     async def send_prompt(self, prompt: str):
         print(f"[AIStudioController] Sende Prompt ({len(prompt)} Zeichen)...")
         self.last_prompt = prompt
@@ -128,13 +203,16 @@ class AIStudioController:
         UI_BLACKLIST   = ["append to prompt", "alt + enter", "edit title",
                           "content_copy", "share", "expand_less",
                           "select a turn", "jump to it", "expand to view",
-                          "thumb_up", "thumb_down", "edit", "more_vert"]
+                          "thumb_up", "thumb_down", "edit", "more_vert",
+                          "thoughts", "chevron_right"]
         NOISE_KEYWORDS = ["save the prompt", "run", "model selection",
                           "feature request", "anywhere", "select a turn",
                           "jump to it", "reached your rate limit",
                           "quota", "try again later", "failed to generate"]
 
         def clean(text: str) -> str:
+            # Remove timestamps like "Model 8:31 PM"
+            text = re.sub(r'Model \d+:\d+\s*(?:AM|PM)', '', text, flags=re.I)
             lines = text.splitlines()
             return "\n".join(
                 l for l in lines
@@ -142,25 +220,54 @@ class AIStudioController:
             ).strip()
 
         def is_good(text: str, current_prompt: str) -> bool:
-            if not text or len(text.strip()) < 30:
-                return False
+            # Fortress: Point-Based Scorer
+            pts = 0
             low = text.strip().lower()
-            for kw in NOISE_KEYWORDS:
-                if kw in low:
+            
+            # --- Point 1: Basic Length ---
+            if len(text.strip()) > 100: pts += 1
+            if len(text.strip()) > 350: pts += 1
+            
+            # --- Point 2: Structure (Markdown) ---
+            has_markdown = any(m in text for m in ["# ", "* ", "1. ", "## ", "- "])
+            if has_markdown: pts += 1
+            
+            # --- Point 3: Code Blocks ---
+            if "```" in text: pts += 1
+            
+            # --- NEGATIVE: Generation Errors ---
+            CRITICAL_ERRORS = ["reached your rate limit", "quota exceeded", "failed to generate", "intensive task"]
+            for kw in CRITICAL_ERRORS:
+                if kw in low: return False
+
+            # --- NEGATIVE: Jaccard Echo Detection (> 70% Overlap) ---
+            p_words = set(re.findall(r'\w+', current_prompt.lower()))
+            r_words = set(re.findall(r'\w+', text.lower()[:800])) # Limit scan for speed
+            if r_words and len(p_words) > 5:
+                overlap = len(p_words.intersection(r_words)) / len(p_words.union(r_words))
+                if overlap > 0.70:
+                    print(f"[is_good] Rejecting turn: Jaccard Echo detected ({overlap:.2f})")
                     return False
-            # Filter matches to original prompt
-            p_snippet = current_prompt.strip()[:100]
-            if p_snippet and p_snippet in text:
-                return False
-            return True
+
+            # Threshold Check
+            is_valid = pts >= 2
+            if not is_valid:
+                print(f"[is_good] Rejecting turn: Score {pts}/4 below threshold.")
+            return is_valid
 
         FALLBACK_MODEL = "Gemini 3 Flash Preview"
         quota_fallback_done = False
 
+        # --- CHAOS SCENARIO B: FORCED QUOTA FALLBACK ---
+        forced_quota = os.getenv("CHAOS_QUOTA", "false").lower() == "true"
+        
         try:
             max_attempts = 100
             for attempt in range(max_attempts):
-                print(f"[AIStudioController] Polling attempt {attempt+1}/{max_attempts}...")
+                # --- CHAOS SCENARIO A: INDUCED TIMEOUT (> 600s) ---
+                if os.getenv("CHAOS_TIMEOUT", "false").lower() == "true":
+                    self.log_event("CHAOS_INJECTION", type="TIMEOUT_DELAY")
+                    await asyncio.sleep(650)
 
                 # Frequent Debugging with expanded tag list
                 if attempt < 3 or attempt % 5 == 0:
@@ -176,16 +283,20 @@ class AIStudioController:
                 # --- QUOTA DETECTION ---
                 try:
                     all_text = (await self.page.locator("body").inner_text() or "").lower()
-                    if ("reached your rate limit" in all_text or "exceeded quota" in all_text) and not quota_fallback_done:
+                    if (("reached your rate limit" in all_text or "exceeded quota" in all_text) or forced_quota) and not quota_fallback_done:
                         quota_fallback_done = True
-                        print(f"[⚠️ QUOTA] Rate-limit! Switching to {FALLBACK_MODEL}...")
+                        self.log_event("QUOTA_FALLBACK_TRIGGERED", trigger="polling" if not forced_quota else "chaos_b")
                         await self.page.keyboard.press("Escape")
                         await asyncio.sleep(2)
+                        
+                        # Stateless reset before fallback
+                        await self.ensure_fresh_chat()
                         await self.set_model(FALLBACK_MODEL)
-                        await asyncio.sleep(5)
+                        await asyncio.sleep(2)
+                        
                         if self.last_prompt:
                             await self.send_prompt(self.last_prompt)
-                            await asyncio.sleep(20)
+                            await asyncio.sleep(15)
                         continue
                 except Exception: pass
 
@@ -212,30 +323,33 @@ class AIStudioController:
                             # Method B: raw inner text (fallback for tricky turns)
                             raw = await turn.inner_text()
                             cleaned = clean(raw)
+                            self.log_event("SCRAPE_POLLING_INFO", turn=i, strategy="1B", length=len(cleaned), snippet=cleaned[:50].replace("\n", " "))
+                            
                             if is_good(cleaned, self.last_prompt or ""):
-                                print(f"[AIStudioController] ✓ Found via Strategy 1B (inner_text) in turn {i}, length={len(cleaned)}")
+                                self.log_event("SCRAPE_SUCCESS", strategy="1B", length=len(cleaned))
                                 return cleaned
                 except Exception as e:
-                    print(f"[AIStudioController] Strategy 1 error: {e}")
+                    err_msg = str(e)
+                    print(f"[AIStudioController] Strategy 1 error: {err_msg}")
+                    if "closed" in err_msg or "Protocol error" in err_msg:
+                        raise e # Trigger Phoenix Protocol
 
                 await asyncio.sleep(10.0)
 
             return "Fehler: KI-Antwort nach Timeout nicht gefunden (DOM-Polling)."
 
         except Exception as e:
+            err_msg = str(e)
+            if "closed" in err_msg or "Protocol error" in err_msg:
+                raise e # Propagate to Worker-Loop for Phoenix Retry
             import traceback
-            return f"Fehler beim Scrapen: {e}\n{traceback.format_exc()}"
+            return f"Fehler beim Scrapen: {err_msg}\n{traceback.format_exc()}"
 
-    def _is_valid_response(self, text: str) -> bool:
-        if not text or len(text.strip()) < 20:
-            return False
-        return True
-
-    def _is_valid_response(self, text: str) -> bool:
+    def is_valid_response(self, text: str) -> bool:
         if not text or len(text.strip()) < 20:
             return False
         if hasattr(self, 'last_prompt') and self.last_prompt:
-            lp = self.last_prompt.strip()
+            lp = self.last_prompt.strip()[:100]
             if lp and lp in text:
                 return False
         return True

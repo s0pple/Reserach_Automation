@@ -1,4 +1,5 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 import uvicorn
 import uuid
 import time
@@ -10,23 +11,35 @@ import random
 
 app = FastAPI()
 
+def log_proxy_event(event_name: str, request_id: str = "N/A", **kwargs):
+    import json
+    payload = {
+        "event": event_name,
+        "request_id": request_id,
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        **kwargs
+    }
+    print(f"[EVENT] {json.dumps(payload)}")
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    print(f"DEBUG: Incoming {request.method} to {request.url.path}")
+    # Generating a request_id if not present for the whole flow
+    request.state.request_id = str(uuid.uuid4())
+    log_proxy_event("HTTP_REQUEST_RECEIVED", request_id=request.state.request_id, method=request.method, path=request.url.path)
     response = await call_next(request)
-    print(f"DEBUG: Response status: {response.status_code}")
+    log_proxy_event("HTTP_RESPONSE_SENT", request_id=request.state.request_id, status=response.status_code)
     return response
 
 # Wir balancen aktuell nur zu Container 1 (8001), um visuell auf VNC (5901) zu debuggen
 PORTS = [8001]
 
-async def ask_browser_agent(prompt: str, model: str = "browser-agent-gemini") -> str:
+async def ask_browser_agent(prompt: str, model: str = "browser-agent-gemini", request_id: str = "N/A") -> str:
     model_lower = model.lower()
     if "aistudio" in model_lower or "gemini" in model_lower:
         port = 8001
     else:
         port = random.choice(PORTS)
-    url = f"http://localhost:{port}/sse"
+    url = f"http://127.0.0.1:{port}/sse"
     print(f"Versuche Container auf Port {port} zu erreichen per Modell {model}...")
 
     async with AsyncExitStack() as stack:
@@ -38,12 +51,12 @@ async def ask_browser_agent(prompt: str, model: str = "browser-agent-gemini") ->
         # Initialisiere die MCP-Verbindung
         await session.initialize()
 
-        model_lower = model.lower()
         if "aistudio" in model_lower or "gemini" in model_lower:
             tool_name = "ask_gemini"
             target_port = 8001
             tool_args = {
                 "session_id": f"aider_{uuid.uuid4().hex[:8]}",
+                "request_id": request_id,
                 "prompt": prompt,
                 "model_name": "Gemini 3.1 Pro Preview"
             }
@@ -51,6 +64,7 @@ async def ask_browser_agent(prompt: str, model: str = "browser-agent-gemini") ->
             tool_name = "ask_chatgpt"
             tool_args = {
                 "session_id": f"aider_{uuid.uuid4().hex[:8]}",
+                "request_id": request_id,
                 "prompt": prompt,
                 "model_name": "ChatGPT"
             }
@@ -58,6 +72,7 @@ async def ask_browser_agent(prompt: str, model: str = "browser-agent-gemini") ->
             tool_name = "ask_claude"
             tool_args = {
                 "session_id": f"aider_{uuid.uuid4().hex[:8]}",
+                "request_id": request_id,
                 "prompt": prompt,
                 "model_name": "Claude"
             }
@@ -65,6 +80,7 @@ async def ask_browser_agent(prompt: str, model: str = "browser-agent-gemini") ->
             tool_name = "ask_deepseek"
             tool_args = {
                 "session_id": f"aider_{uuid.uuid4().hex[:8]}",
+                "request_id": request_id,
                 "prompt": prompt,
                 "model_name": "DeepSeek"
             }
@@ -72,15 +88,17 @@ async def ask_browser_agent(prompt: str, model: str = "browser-agent-gemini") ->
             tool_name = "ask_perplexity"
             tool_args = {
                 "session_id": f"aider_{uuid.uuid4().hex[:8]}",
+                "request_id": request_id,
                 "prompt": prompt,
                 "model_name": "Perplexity"
             }
         else:
             # Fallback for generic names like gpt-4o
-            print(f"DEBUG: Unknown model mapping for '{model}', falling back to Gemini")
+            log_proxy_event("MODEL_MAPPING_FALLBACK", request_id=request_id, model=model)
             tool_name = "ask_gemini"
             tool_args = {
                 "session_id": f"aider_{uuid.uuid4().hex[:8]}",
+                "request_id": request_id,
                 "prompt": prompt,
                 "model_name": "Gemini 3.1 Pro Preview"
             }
@@ -140,14 +158,37 @@ async def chat_completions(request: Request, override_body: dict = None):
     full_prompt = "\n\n".join([f"{m.get('role', 'user').upper()}:\n{m.get('content', '')}" for m in messages])
     
     model_name = body.get("model", "browser-agent-gemini")
-    print(f"--> Sende vollständigen Prompt an Browser Agent (Länge: {len(full_prompt)} Zeichen, Modell: {model_name})")
+    request_id = request.state.request_id if hasattr(request.state, 'request_id') else str(uuid.uuid4())
+    print(f"--> Sende vollständigen Prompt (REQ: {request_id}, Länge: {len(full_prompt)})")
     
     try:
-        browser_response = await ask_browser_agent(full_prompt, model=model_name)
+        browser_response = await ask_browser_agent(full_prompt, model=model_name, request_id=request_id)
+        
+        # Check if browser_response is a JSON error object
+        import json
+        try:
+            error_data = json.loads(browser_response)
+            if isinstance(error_data, dict) and error_data.get("status") == "error":
+                err_type = error_data.get("type", "internal_error")
+                status_code = 500
+                if err_type == "quota_exceeded": status_code = 429
+                elif err_type == "timeout": status_code = 408
+                
+                log_proxy_event("PROXY_ERROR_SENT", request_id=request_id, status=status_code, type=err_type)
+                return JSONResponse(status_code=status_code, content=error_data)
+        except (json.JSONDecodeError, TypeError):
+            # Not a JSON error, proceed as normal result
+            pass
+            
     except Exception as e:
         import traceback
         traceback.print_exc()
-        browser_response = f"Proxy Interner Fehler: {str(e)}"
+        log_proxy_event("PROXY_ERROR_SENT", request_id=request_id, status=500, type="internal_error")
+        return JSONResponse(status_code=500, content={
+            "status": "error",
+            "type": "internal_error",
+            "details": f"Proxy Interner Fehler: {str(e)}"
+        })
         
     print(f"<-- Antwort vom Browser Agent empfangen (Länge: {len(browser_response)} Zeichen)")
 
@@ -162,7 +203,7 @@ async def chat_completions(request: Request, override_body: dict = None):
 
     # 3. Exakter OpenAI JSON Standard
     final_json = {
-        "id": f"chatcmpl-{int(time.time())}",
+        "id": f"chatcmpl-{uuid.uuid4().hex}",
         "object": "chat.completion",
         "created": int(time.time()),
         "model": "browser-agent-aistudio",

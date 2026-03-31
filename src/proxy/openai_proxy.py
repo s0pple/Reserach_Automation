@@ -4,6 +4,17 @@ import uvicorn
 import uuid
 import time
 import asyncio
+import sys
+import codecs
+
+# Force UTF-8 for console output on Windows to prevent UnicodeEncodeError
+if sys.platform == "win32":
+    # sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    # Use a more direct approach if the terminal is stubborn
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 from mcp.client.session import ClientSession
 from mcp.client.sse import sse_client
 from contextlib import AsyncExitStack

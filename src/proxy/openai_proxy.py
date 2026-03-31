@@ -155,11 +155,25 @@ async def chat_completions(request: Request, override_body: dict = None):
 
     # Um Kontext für das Browser-Modell nicht zu verlieren, fügen wir alle System-/User-Prompts zusammen
     # Da wir in einem "dummen" Textfeld in AI Studio tippen, ist das der sicherste Weg, nichts von Aiders Prompts zu verlieren.
-    full_prompt = "\n\n".join([f"{m.get('role', 'user').upper()}:\n{m.get('content', '')}" for m in messages])
+    def format_content(content):
+        if isinstance(content, list):
+            # Extract text from message blocks (OpenAI / OpenClaw format)
+            texts = []
+            for item in content:
+                if isinstance(item, dict):
+                    # Handle 'text' or 'input_text' or direct content
+                    t = item.get('text') or item.get('input_text') or item.get('content')
+                    if t: texts.append(str(t))
+                else:
+                    texts.append(str(item))
+            return "\n".join(texts)
+        return str(content)
+
+    full_prompt = "\n\n".join([f"{m.get('role', 'user').upper()}:\n{format_content(m.get('content', ''))}" for m in messages])
     
     model_name = body.get("model", "browser-agent-gemini")
     request_id = request.state.request_id if hasattr(request.state, 'request_id') else str(uuid.uuid4())
-    print(f"--> Sende vollständigen Prompt (REQ: {request_id}, Länge: {len(full_prompt)})")
+    print(f"--> Sende vollständigen Prompt (REQ: {request_id}, Filter-Länge: {len(full_prompt)})")
     
     try:
         browser_response = await ask_browser_agent(full_prompt, model=model_name, request_id=request_id)

@@ -80,48 +80,99 @@ class AIStudioController:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                # 1. Open URL
-                self.log_event("NEW_CHAT_REQUESTED", url=self.url)
+                print(f"[AIStudioController] Lade neuen Chat (Versuch {attempt+1}/{max_retries})...")
                 await self.page.goto(self.url, wait_until="domcontentloaded", timeout=60000)
-                await asyncio.sleep(2)
+                await asyncio.sleep(3)
+
+                # 0. Check for Login Screen
+                if "accounts.google.com" in self.page.url or "signin" in self.page.url.lower():
+                    print("[AIStudioController] 🔐 LOGIN ERFORDERLICH! Bitte im Browser anmelden.")
+                    self.log_event("LOGIN_REQUIRED", url=self.page.url)
+                    # Wir geben dem Nutzer 30 Sekunden zum reagieren, bevor wir aufgeben
+                    for i in range(30):
+                        if "aistudio.google.com" in self.page.url and "signin" not in self.page.url.lower():
+                            print("[AIStudioController] Login erkannt, fahre fort...")
+                            break
+                        await asyncio.sleep(1)
+                    else:
+                        raise RuntimeError("Login bei Google erforderlich. Bitte im Browser-Fenster manuell anmelden!")
+
+                # 1b. Crash/Restore/Popup Clicker (The "Door Opener")
+                # Erweitert um "Welcome", "Dismiss all", "Get started"
+                popups = ["Restore", "Dismiss", "Accept", "Got it", "Welcome", "Get started", "Not now", "Confirm"]
+                for popup in popups:
+                    try:
+                        # Suche nach Buttons, die diesen Text enthalten (Case-Insensitive)
+                        btn = self.page.get_by_role("button", name=re.compile(popup, re.I)).last
+                        if await btn.count() > 0 and await btn.is_visible():
+                            print(f"[AIStudioController] Schließe Popup: '{popup}'")
+                            await btn.click(force=True)
+                            self.log_event("POPUP_DISMISSED", text=popup)
+                            await asyncio.sleep(1)
+                    except: pass
 
                 # 2. Hard Ready-Check: Wait for prompt-box to be interactive
+                print("[AIStudioController] Warte auf Prompt-Box (Eingabebereich)...")
                 prompt_box = self.page.locator("ms-prompt-box textarea").first
                 try:
                     await prompt_box.wait_for(state="visible", timeout=30000)
                     # Ensure it's not disabled (AI Studio sometimes overlays while loading)
-                    for _ in range(20):
+                    for i in range(40):
                         if await prompt_box.is_enabled():
+                            print(f"[AIStudioController] Prompt-Box bereit (nach {i*0.5}s).")
                             break
+                        if i % 10 == 0:
+                            print("[AIStudioController] Prompt-Box ist noch gesperrt (Loading UI?)...")
                         await asyncio.sleep(0.5)
+                    else:
+                        print("[AIStudioController] Prompt-Box blieb gesperrt. Versuche Reload.")
+                        raise RuntimeError("Prompt-Box locked.")
                 except Exception as e:
                     self.log_event("READY_CHECK_FAILED", error=str(e))
-                    raise RuntimeError("Prompt-Box not interactive after 30s.")
+                    print(f"[AIStudioController] Prompt-Box nicht gefunden/bereit: {e}")
+                    raise RuntimeError("Prompt-Box not interactive after timeout.")
 
                 # 3. Clean-Verify: Paranoiac DOM validation
                 # Check for any visible chat turns or markdown results
-                bad_selectors = ["ms-chat-turn", "markdown-viewer", ".model-turn", ".message-content"]
+                bad_selectors = ["ms-chat-turn", "markdown-viewer", ".model-turn", ".message-content", ".shared-prompt"]
                 dirty_elements = 0
-                for sel in bad_selectors:
-                    locs = await self.page.locator(sel).all()
-                    for loc in locs:
-                        if await loc.is_visible():
-                            dirty_elements += 1
+                
+                # Warte bis zu 5s, ob alte Elemente verschwinden
+                for i in range(10):
+                    dirty_elements = 0
+                    for sel in bad_selectors:
+                        try:
+                            locs = await self.page.locator(sel).all()
+                            for loc in locs:
+                                if await loc.is_visible():
+                                    dirty_elements += 1
+                        except: pass
+                    
+                    if dirty_elements == 0: break
+                    if i % 2 == 0:
+                        print(f"[AIStudioController] Warte auf leeren Chat ({dirty_elements} Elemente noch da)...")
+                    await asyncio.sleep(0.5)
                 
                 # Check textarea specifically
                 prompt_box = self.page.locator("ms-prompt-box textarea, textarea").last
-                text_val = await prompt_box.input_value() if await prompt_box.count() > 0 else "MISSING"
+                text_val = ""
+                if await prompt_box.count() > 0:
+                    try: text_val = await prompt_box.input_value()
+                    except: pass
                 
-                if dirty_elements == 0 and (text_val == "" or text_val == "MISSING"):
+                if dirty_elements == 0 and (not text_val or text_val.strip() == ""):
                     self.log_event("NEW_CHAT_VERIFIED", status="CLEAN", attempt=attempt+1)
+                    print("[AIStudioController] ✓ Chat ist sauber und bereit.")
                     return
                 else:
-                    self.log_event("NEW_CHAT_DIRTY", elements=dirty_elements, text_length=len(text_val), attempt=attempt+1)
-                    await self.page.reload(wait_until="networkidle")
-                    await asyncio.sleep(3)
+                    self.log_event("NEW_CHAT_DIRTY", elements=dirty_elements, text_length=len(text_val or ""), attempt=attempt+1)
+                    print(f"[AIStudioController] Chat noch 'schmutzig' ({dirty_elements} Elemente, Text: {len(text_val or '')}). Erzwinge Reload...")
+                    await self.page.reload(wait_until="domcontentloaded")
+                    await asyncio.sleep(5)
             except Exception as e:
                 self.log_event("NEW_CHAT_ERROR", error=str(e), attempt=attempt+1)
-                await asyncio.sleep(1)
+                print(f"[AIStudioController] Fehler in ensure_fresh_chat (Versuch {attempt+1}): {e}")
+                await asyncio.sleep(2)
 
         self.log_event("FATAL_STATE_DIRTY", action="HALT")
         raise RuntimeError("Unrecoverable State Dirty: Could not clear AI Studio session after 3 retries.")
@@ -149,47 +200,90 @@ class AIStudioController:
             await prompt_box.focus()
             await asyncio.sleep(0.5)
 
-            # 2. Clear & Inject via Clipboard-Sim (very reliable for large texts)
-            await self.page.keyboard.press("Control+a")
+            # 2. Clear & Inject
+            # AI Studio's contenteditable is very stubborn. 
+            # Best approach: Select All, Delete, then force the inner text.
+            await self.page.keyboard.press("Control+A")
+            await asyncio.sleep(0.1)
             await self.page.keyboard.press("Backspace")
+            await asyncio.sleep(0.2)
             
-            # Using evaluate to set value and dispatch 'input' - works across most frameworks
+            # Fast text injection using Javascript onto the actual nested textarea/element
+            print("[AIStudioController] Injiziere Prompt...")
             await self.page.evaluate(f"""(text) => {{
-                const el = document.activeElement;
-                if (!el) return;
-                const valueSetter = Object.getOwnPropertyDescriptor(el.__proto__, 'value')?.set;
-                const prototype = Object.getPrototypeOf(el);
-                const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
-                if (valueSetter && valueSetter !== prototypeValueSetter) {{
-                    valueSetter.call(el, text);
-                }} else {{
-                    el.value = text;
+                // Find all potential input areas
+                let el = document.activeElement;
+                if (!el || (el.tagName !== 'TEXTAREA' && !el.isContentEditable)) {{
+                    const textareas = document.querySelectorAll('ms-prompt-box textarea, [contenteditable="true"]');
+                    el = textareas[textareas.length - 1]; 
                 }}
-                el.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                
+                if (el) {{
+                    if (el.isContentEditable) {{
+                        el.textContent = text;
+                    }} else {{
+                        el.value = text;
+                        el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    }}
+                }}
             }}""", prompt)
 
-            # 3. Final nudge: type a space
+            # 3. Final nudge: type a space to trigger React state update
+            await asyncio.sleep(0.5)
+            await prompt_box.focus()
             await self.page.keyboard.type(" ")
-            await asyncio.sleep(1)
+            
+            # 3b. UI-Freeze Stabilizer (Massive Prompts > 20k)
+            wait_time = 5.0 if len(prompt) > 20000 else 2.0
+            print(f"[AIStudioController] Paste done. Warten {wait_time}s auf React-Stabilisierung...")
+            await asyncio.sleep(wait_time)
 
-            # 4. Wait for Run button to be enabled
+            # 4. Wait for Run button to be enabled (Token counting can take time)
             run_btn = self.page.locator("ms-run-button button, button:has-text('Run')").last
             if await run_btn.count() > 0:
-                print("[AIStudioController] Warte auf Run-Button-Enable (Token counting)...")
-                for _ in range(120): # up to 60s
-                    if await run_btn.is_enabled(): break
-                    await asyncio.sleep(0.5)
-                
+                print("[AIStudioController] Warte auf Run-Button (Token counting)...")
+                # Wait up to 120s for Token counting on massive prompts
+                try:
+                    await run_btn.wait_for(state="visible", timeout=30000)
+                    for i in range(240): # up to 120s (0.5s steps)
+                        if await run_btn.is_enabled():
+                            print(f"[AIStudioController] Run-Button bereit nach {i*0.5}s.")
+                            break
+                        if i % 20 == 0:
+                            print("[AIStudioController] Token-Zähler läuft noch...")
+                        await asyncio.sleep(0.5)
+                except:
+                    print("[AIStudioController] Run-Button nicht sichtbar/bereit. Versuche Control+Enter Fallback.")
+
                 if await run_btn.is_enabled():
                     await run_btn.click(force=True)
-                    print("[AIStudioController] ms-run-button geklickt.")
+                    print("[AIStudioController] Run-Button geklickt. Warte auf Start der Generierung...")
+                    
+                    # 4b. Smart-Check: Hat die Generierung gestartet?
+                    # Erhöht auf 3s, da Thinking-Modelle länger zum Umschalten brauchen
+                    await asyncio.sleep(3.0)
+                    
+                    # Prüfe auf Indikatoren für aktive Generierung
+                    is_generating = await self.page.locator("ms-thought-chunk, .generating, ms-stop-button").count() > 0
+                    
+                    if is_generating:
+                        print("[AIStudioController] ✓ Generierung/Denken läuft bereits.")
+                    elif await run_btn.count() > 0:
+                        try:
+                            btn_text = await run_btn.inner_text()
+                            if "Stop" in btn_text or "Cancel" in btn_text:
+                                print("[AIStudioController] ✓ Generierung läuft (Stop-Button erkannt).")
+                            elif await run_btn.is_enabled():
+                                print("[AIStudioController] Button noch aktiv/Run. Versuche vorsichtigen zweiten Klick...")
+                                self.log_event("RETRY_CLICK_TRIGGERED")
+                                await run_btn.click(force=True)
+                        except: pass
                 else:
-                    print("[AIStudioController] Run-Button blieb disabled. Versuche Control+Enter.")
+                    print("[AIStudioController] Run-Button blieb disabled. Control+Enter Fallback...")
                     await self.page.keyboard.press("Control+Enter")
             else:
+                print("[AIStudioController] Kein Run-Button gefunden. Control+Enter.")
                 await self.page.keyboard.press("Control+Enter")
-                print("[AIStudioController] Run-Button nicht gefunden. Control+Enter gesendet.")
 
             await asyncio.sleep(2)
 

@@ -35,7 +35,7 @@ class BrowserTask:
 task_queue: asyncio.Queue = asyncio.Queue()
 
 # Iron Fortress: Persistence Layer
-DATA_DIR = "/app/data"
+DATA_DIR = os.getenv("DATA_DIR", "data")
 QUEUE_FILE = os.path.join(DATA_DIR, "persistent_queue.json")
 RESULTS_DIR = os.path.join(DATA_DIR, "results")
 
@@ -120,7 +120,15 @@ class TabRegistry:
                     context_ok = False
             
             if not context_ok:
-                profile_path = f'/app/data/browser_sessions/{self.account_id}'
+                profile_path = os.path.join(DATA_DIR, 'browser_sessions', self.account_id)
+                
+                # singleton lock knacken
+                lock_path = os.path.join(profile_path, "SingletonLock")
+                if os.path.exists(lock_path):
+                    print(f"[TabRegistry] Entferne SingletonLock unter {lock_path}...")
+                    try: os.remove(lock_path)
+                    except: pass
+
                 print(f'[TabRegistry] LONE-WOLF/RECOVER Lade Context [{self.account_id}]...')
                 self.context = await self.playwright.chromium.launch_persistent_context(
                     user_data_dir=profile_path,

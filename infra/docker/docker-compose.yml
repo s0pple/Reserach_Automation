@@ -1,46 +1,59 @@
-version: '3.8'
-
 services:
   gemini-acc-1:
-    build: 
-      context: .
+    build:
+      context: ../..
       dockerfile: infra/docker/Dockerfile.mcp
     container_name: mcp_gemini_1
     restart: unless-stopped
     environment:
       - ACCOUNT_ID=acc_1
       - DISPLAY=:99
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - CHAOS_SABOTAGE=${CHAOS_SABOTAGE:-}
+      - PYTHONPATH=/app
     volumes:
-      # Code Sync
-      - ./src:/app/src
-      # Account 1 Session (Persistent)
-      - ./data/browser_sessions/acc_1:/app/data/browser_sessions/acc_1
-      # Logs/Temp
-      - ./temp:/app/temp
+      - ../../output:/app/output
+      - ../../src:/app/src
+      - ../../tests:/app/tests
+      - ../../data/browser_sessions/acc_1:/app/data/browser_sessions/acc_1
+      - ../../temp:/app/temp
     ports:
-      - "8001:8000" # MCP Port for Account 1
-      - "5901:5900" # VNC Port to watch the screen
+      - "8001:8000"
+      - "5901:5900"
     env_file:
-      - .env
+      - ../../.env
   gemini-acc-2:
-    build: 
-      context: .
+    build:
+      context: ../..
       dockerfile: infra/docker/Dockerfile.mcp
     container_name: mcp_gemini_2
     restart: unless-stopped
     environment:
       - ACCOUNT_ID=acc_2
       - DISPLAY=:99
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     volumes:
-      - ./src:/app/src
-      - ./data/browser_sessions/acc_2:/app/data/browser_sessions/acc_2
-      - ./temp:/app/temp
+      - ../../output:/app/output
+      - ../../src:/app/src
+      - ../../data/browser_sessions/acc_2:/app/data/browser_sessions/acc_2
+      - ../../temp:/app/temp
     ports:
-      - "8002:8000" # MCP Port for Account 2
-      - "5902:5900" # VNC Port to watch the screen
+      - "8002:8000"
+      - "5902:5900"
+  openai-proxy:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.mcp
+    container_name: openai_proxy
+    restart: unless-stopped
+    command: python src/proxy/openai_proxy.py
+    environment:
+      - MCP_HOST_1=gemini-acc-1
+      - MCP_PORT_1=8000
+    volumes:
+      - ../../output:/app/output
+      - ../../src:/app/src
+    ports:
+      - "9002:5000"
+    depends_on:
+      - gemini-acc-1
     env_file:
-      - .env
+      - ../../.env

@@ -79,7 +79,7 @@ def test_ai_studio_submission():
         response = requests.post(
             url,
             json=payload,
-            timeout=120,
+            timeout=300,
             headers={"Content-Type": "application/json"}
         )
         

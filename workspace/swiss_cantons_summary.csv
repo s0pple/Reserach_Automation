@@ -1,0 +1,5 @@
+Canton_ID,Status,Audit,Hauptort,Einwohner,Beitrittsjahr,Amtssprachen,Wirtschaft,Attempts,Duration,Log_File
+canton_aargau,failed,"ALERT: YEAR_HAL, POP_HAL, MISSING_DATA",MISSING,MISSING,MISSING,MISSING,MISSING,3,13.41,canton_aargau.log
+canton_appenzell_ausserrhoden,completed,"ALERT: YEAR_HAL, POP_HAL, MISSING_DATA",MISSING,MISSING,MISSING,MISSING,MISSING,3,31.41,canton_appenzell_ausserrhoden.log
+canton_appenzell_innerrhoden,failed,"ALERT: YEAR_HAL, POP_HAL, MISSING_DATA",MISSING,MISSING,MISSING,MISSING,MISSING,3,13.57,canton_appenzell_innerrhoden.log
+canton_basel_landschaft,completed,"ALERT: YEAR_HAL, POP_HAL, MISSING_DATA",MISSING,MISSING,MISSING,MISSING,MISSING,0,32.07,canton_basel_landschaft.log

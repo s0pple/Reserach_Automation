@@ -16,6 +16,8 @@ services:
       - ../../tests:/app/tests
       - ../../data/browser_sessions/acc_1:/app/data/browser_sessions/acc_1
       - ../../temp:/app/temp
+      - ../../workspace:/app/workspace
+      - ../../tasks:/app/tasks
     ports:
       - "8001:8000"
       - "5901:5900"
@@ -35,6 +37,8 @@ services:
       - ../../src:/app/src
       - ../../data/browser_sessions/acc_2:/app/data/browser_sessions/acc_2
       - ../../temp:/app/temp
+      - ../../workspace:/app/workspace
+      - ../../tasks:/app/tasks
     ports:
       - "8002:8000"
       - "5902:5900"
@@ -48,12 +52,20 @@ services:
     environment:
       - MCP_HOST_1=gemini-acc-1
       - MCP_PORT_1=8000
+      - MCP_HOST_2=gemini-acc-2
+      - MCP_PORT_2=8000
+      - OLLAMA_URL=http://host.docker.internal:11434/v1/chat/completions
     volumes:
       - ../../output:/app/output
       - ../../src:/app/src
+      - ../../workspace:/app/workspace
+      - ../../tasks:/app/tasks
     ports:
       - "9002:5000"
     depends_on:
       - gemini-acc-1
+      - gemini-acc-2
     env_file:
       - ../../.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

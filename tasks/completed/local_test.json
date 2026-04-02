@@ -1,0 +1,16 @@
+{
+    "id": "local_test",
+    "task_id": "local_test",
+    "status": "completed",
+    "prompt": "Write 'OK' to workspace/test.txt. Use local command: cmd /c echo OK > workspace/test.txt. Do not use browser.",
+    "expected_file": "workspace/test.txt",
+    "expected_content": "OK",
+    "started_at": "2026-04-02T01:56:43.515396",
+    "log_output": "--- Direct Node Run started at 2026-04-02 01:56:43 ---\nTask: local_test\n\nNo reply from agent.\n",
+    "output_snippet": "--- Direct Node Run started at 2026-04-02 01:56:43 ---\nTask: local_test\n\nNo reply from agent.\n",
+    "errors": "",
+    "duration_sec": 58.18,
+    "exit_code": 0,
+    "finished_at": "2026-04-02T01:57:41.693021",
+    "attempts": 3
+}

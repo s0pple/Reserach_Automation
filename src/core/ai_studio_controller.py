@@ -181,21 +181,28 @@ class AIStudioController:
 
     async def is_progressing(self, current_text: str) -> bool:
         """ARE Phase 1: Causality Check. Distinguishes between 'Waiting' and 'Streaming'."""
+        # 1. Check for active UI markers (Tools/Thinking)
+        active_markers = ["ms-thought-chunk", "ms-tool-call", "ms-progress-bar", ".thinking-container"]
+        for marker in active_markers:
+            try:
+                if await self.page.locator(marker).count() > 0:
+                    print(f"[is_progressing] Active UI marker detected: {marker}")
+                    return True
+            except: pass
+
+        # 2. Basic Text Delta
         current_len = len(current_text)
-        diff = current_len - self.last_snapshot_len
-        self.last_snapshot_len = current_len
+        if not hasattr(self, '_last_snapshot_len'):
+            self._last_snapshot_len = current_len
+            return True
         
-        # Positive growth means generation is happening
+        diff = abs(current_len - self._last_snapshot_len)
+        self._last_snapshot_len = current_len
+        
         if diff > 0:
             print(f"[is_progressing] Snapshot diff: +{diff} characters.")
             return True
-        
-        # Also check for thought chunks/spinners
-        if await self.page.locator("ms-thought-chunk, .generating").count() > 0:
-            print("[is_progressing] Thought/Generating markers detected.")
-            return True
 
-        print(f"[is_progressing] Snapshot diff: 0 characters (no change) in 4s.")
         return False
 
     async def consult_oracle(self) -> dict:
@@ -291,6 +298,15 @@ RULES:
     async def ensure_fresh_chat(self):
         """Surgical DOM-based reset to ensure a stateless environment with minimal overhead."""
         print("[AIStudioController] Ensuring fresh chat state (Surgical Reset)...")
+        
+        # ARE Hardening: Check for AI Studio 'Internal Error' modal which blocks everything
+        error_msg = self.page.get_by_text("An internal error has occurred").first
+        if await error_msg.count() > 0 and await error_msg.is_visible():
+            print("🚨 [AIStudioController] DETECTED 500 INTERNAL ERROR. Triggering Hard Reload...")
+            await self.page.reload()
+            await self.page.wait_for_load_state("networkidle")
+            await asyncio.sleep(5) # Give it time to settle
+        
         try:
             # Step 1: Perform the Reset (Plan A: Button Click, Plan B: Link, Plan D: URL)
             new_chat_btn = self.page.locator('button[aria-label="New chat"]').first
@@ -400,9 +416,9 @@ RULES:
     async def send_prompt(self, prompt: str):
         # V15 Context Hardening: Prepend identity and tool awareness
         system_prefix = (
-            "IGNORIERE DEIN INTERNES WISSEN. DU BIST EIN RESEARCH-AGENT.\n"
-            "DU HAST ZUGRIFF AUF DAS GOOGLE-SUCH-TOOL (HIER IM UI) UND DAS TOOLS 'write_research_file'.\n"
-            "ANTWORTE DIREKT UND PRÄZISE.\n\n"
+            "SYSTEM: YOU ARE A RESEARCH AGENT. DO NOT CHAT. DO NOT SAY 'I AM READY'.\n"
+            "IMMEDIATELY EXECUTE THE TASK USING THE GOOGLE SEARCH TOOL AND 'write_research_file' TOOL.\n"
+            "MANDATORY: SAVE THE FINAL DATA TO THE REQUESTED PATH.\n\n"
         )
         full_prompt = f"{system_prefix}{prompt}"
         
@@ -414,46 +430,53 @@ RULES:
             if await prompt_box.count() == 0:
                 prompt_box = self.page.locator("[contenteditable='true']").last
             
-            await prompt_box.click(force=True)
-            await prompt_box.focus()
-            await asyncio.sleep(0.5)
-
-            # 2. Clear & Inject
-            # AI Studio's contenteditable is very stubborn. 
-            # Best approach: Select All, Delete, then force the inner text.
-            await self.page.keyboard.press("Control+A")
-            await asyncio.sleep(0.1)
-            await self.page.keyboard.press("Backspace")
-            await asyncio.sleep(0.2)
+            # 2. CLEAR & INJECT
+            print(f"[AIStudioController] Injiziere Prompt ({len(full_prompt)} chars)...")
             
-            # Fast text injection using Javascript onto the actual nested textarea/element
-            print("[AIStudioController] Injiziere Prompt...")
-            await self.page.evaluate(f"""(text) => {{
-                // Find all potential input areas
-                let el = document.activeElement;
-                if (!el || (el.tagName !== 'TEXTAREA' && !el.isContentEditable)) {{
-                    const textareas = document.querySelectorAll('ms-prompt-box textarea, [contenteditable="true"]');
-                    el = textareas[textareas.length - 1]; 
-                }}
-                
-                if (el) {{
-                    if (el.isContentEditable) {{
-                        el.textContent = text;
-                    }} else {{
-                        el.value = text;
-                        el.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                    }}
-                }}
-            }}""", prompt)
-
-            # 3. Final nudge: type a space to trigger React state update
-            await asyncio.sleep(0.5)
+            # Focused Clearing
             await prompt_box.focus()
-            await self.page.keyboard.type(" ")
+            await self.page.keyboard.press("Control+A")
+            await asyncio.sleep(0.2)
+            await self.page.keyboard.press("Backspace")
+            await asyncio.sleep(0.3)
+            
+            # Primary: insert_text (Simulates a paste event, triggers React/Lit listeners)
+            await self.page.keyboard.insert_text(full_prompt)
+            await asyncio.sleep(0.5)
+            
+            # Verification Loop (React State Sync)
+            verification_success = False
+            for attempt in range(5):
+                current_value = await prompt_box.evaluate("el => el.value || el.innerText")
+                if len(current_value.strip()) >= len(full_prompt.strip()) * 0.8: # Buffer
+                    verification_success = True
+                    break
+                print(f"   ⏳ Verification Attempt {attempt+1}: Got {len(current_value)} chars. Retrying insert...")
+                await self.page.keyboard.press("Control+A")
+                await self.page.keyboard.press("Backspace")
+                await self.page.keyboard.insert_text(full_prompt)
+                await asyncio.sleep(1.0)
+            
+            if not verification_success:
+                print("   ⚠️ Keyboard injection verification failed. Falling back to Surgical Eval.")
+                await self.page.evaluate(f"""(text) => {{
+                    const el = document.querySelector('ms-prompt-box textarea, [contenteditable="true"]');
+                    if (el) {{
+                        if (el.isContentEditable) el.textContent = text;
+                        else el.value = text;
+                        el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                        el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    }}
+                }}""", full_prompt)
+                await asyncio.sleep(1)
+
+            # 3. Final Nudge & Run
+            await self.page.keyboard.press("End")
+            await self.page.keyboard.type(" ") # Final React trigger
             
             # 3b. UI-Freeze Stabilizer (Massive Prompts > 20k)
-            wait_time = 5.0 if len(prompt) > 20000 else 2.0
-            print(f"[AIStudioController] Paste done. Warten {wait_time}s auf React-Stabilisierung...")
+            wait_time = 5.0 if len(prompt) > 20000 else 1.5
+            print(f"[AIStudioController] Paste verifiziert. Warten {wait_time}s...")
             await asyncio.sleep(wait_time)
             await self.update_milestone(Milestone.PROMPT_INJECTED)
 
@@ -540,15 +563,9 @@ RULES:
         # --- CHAOS SCENARIO B: FORCED QUOTA FALLBACK ---
         forced_quota = os.getenv("CHAOS_QUOTA", "false").lower() == "true"
         
+        last_change_time = time.time()
         try:
-            max_attempts = 100
-            stagnation_count = 0
-            for attempt in range(max_attempts):
-                # --- CHAOS SCENARIO A: INDUCED TIMEOUT (> 600s) ---
-                if os.getenv("CHAOS_TIMEOUT", "false").lower() == "true":
-                    self.log_event("CHAOS_INJECTION", type="TIMEOUT_DELAY")
-                    await asyncio.sleep(650)
-
+            for attempt in range(30): # 30 * 10s = 5 minutes total
                 # Get Current DOM text snapshot
                 try:
                     raw_body = await self.page.locator("body").inner_text()
@@ -556,19 +573,23 @@ RULES:
                 except: clean_text = ""
 
                 # --- ARE: STAGNATION DETECTION (Subtle Noise) ---
-                if not await self.is_progressing(clean_text):
-                    stagnation_count += 1
-                    if stagnation_count >= 2: # 8 seconds of no change
-                        print(f"[AIStudioController] Stagnation erkannt nach 8s Leerlauf.")
+                # Check for tool call markers (pause stagnation for long searches)
+                has_tool_node = await self.page.locator("ms-tool-call, .tool-call, ms-tool-output-container").count() > 0
+                
+                if await self.is_progressing(clean_text) or has_tool_node:
+                    last_change_time = time.time()
+                else:
+                    stagnant_sec = time.time() - last_change_time
+                    # ⚓ [Hardening] 90s (1.5m) Instead of 300s - LLMs don't sleep for 90s.
+                    if stagnant_sec > 90:
+                        print(f"[AIStudioController] Stagnation detected after {stagnant_sec:.0f}s of silence.")
                         diag = await self.consult_oracle()
-                        success = await self.execute_oracle_strategy(diag.get("strategy", "RELOAD_PAGE"), diag.get("confidence", 0.5))
+                        strategy = diag.get("strategy", "RELOAD_PAGE")
+                        success = await self.execute_oracle_strategy(strategy, diag.get("confidence", 0.5))
                         if success:
-                            # After recovery (e.g. reload), we must restart the wait loop
                             return await self.wait_for_response() 
                         else:
-                            return "Fehler: Agent konnte sich nicht aus Stagnation befreien."
-                else:
-                    stagnation_count = 0
+                            return "ERR_AGENT_STAGNANT: Agent failed to recover from silence."
 
                 # Frequent Debugging with expanded tag list
                 if attempt < 3 or attempt % 5 == 0:
@@ -630,6 +651,32 @@ RULES:
                                 self.log_event("SCRAPE_SUCCESS", strategy="1B", length=len(cleaned))
                                 await self.update_milestone(Milestone.COMPLETED)
                                 return cleaned
+
+                            # Method C: Precise Turn Scrape (for rich tool/search results)
+                            if "thumb_up" in raw.lower() or "more_vert" in raw.lower():
+                                lines = [l.strip() for l in raw.split("\n") if l.strip()]
+                                # Targeted Header/Footer Removal
+                                def is_ui_noise(l):
+                                    import re
+                                    if re.match(r"^Model\s+\d+:\d+\s+[AP]M$", l, re.I): return True
+                                    if l.lower() in ["edit", "more_vert", "thumb_up", "thumb_down", "share", "settings"]: return True
+                                    return False
+                                
+                                filtered = [l for l in lines if not is_ui_noise(l)]
+                                final_agg = "\n".join(filtered)
+                                if len(final_agg.strip()) >= 5: 
+                                    self.log_event("SCRAPE_SUCCESS", strategy="1C_precise", length=len(final_agg))
+                                    await self.update_milestone(Milestone.COMPLETED)
+                                    return final_agg
+
+                            # Method D: Structural Extraction (Parent div for results)
+                            interaction = await turn.locator("ms-interaction-content").all()
+                            if interaction:
+                                itext = await interaction[0].inner_text()
+                                if len(itext.strip()) > 5:
+                                    self.log_event("SCRAPE_SUCCESS", strategy="1D_interaction", length=len(itext))
+                                    await self.update_milestone(Milestone.COMPLETED)
+                                    return itext
                 except Exception as e:
                     err_msg = str(e)
                     print(f"[AIStudioController] Strategy 1 error: {err_msg}")
@@ -647,11 +694,3 @@ RULES:
             import traceback
             return f"Fehler beim Scrapen: {err_msg}\n{traceback.format_exc()}"
 
-    def is_valid_response(self, text: str) -> bool:
-        if not text or len(text.strip()) < 20:
-            return False
-        if hasattr(self, 'last_prompt') and self.last_prompt:
-            lp = self.last_prompt.strip()[:100]
-            if lp and lp in text:
-                return False
-        return True

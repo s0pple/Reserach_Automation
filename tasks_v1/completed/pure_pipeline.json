@@ -1,0 +1,16 @@
+{
+    "id": "pure_pipeline",
+    "task_id": "pure_pipeline",
+    "status": "failed",
+    "prompt": "[force_local_ollama] Write 'OK' into workspace/pure.txt",
+    "expected_file": "workspace/pure.txt",
+    "expected_content": "OK",
+    "started_at": "2026-04-02T13:05:52.689405",
+    "log_output": "--- Direct Node Run started at 2026-04-02 13:05:52 ---\nTask: pure_pipeline\n\nNo reply from agent.\n",
+    "output_snippet": "--- Direct Node Run started at 2026-04-02 13:05:52 ---\nTask: pure_pipeline\n\nNo reply from agent.\n",
+    "errors": "",
+    "duration_sec": 3.13,
+    "exit_code": 0,
+    "finished_at": "2026-04-02T13:05:55.817079",
+    "attempts": 3
+}

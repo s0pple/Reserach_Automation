@@ -45,9 +45,20 @@ The system operates like a digital venture firm, following a 4-phase funnel:
 ## 🛠 Quick Start – Running the Analyst
 
 ### 1. Environment Setup
+
+**Option A – Automated (recommended):** Run the provided setup script. It creates the virtual environment, installs all dependencies, and sets up Playwright in one step:
+```powershell
+.\setup.ps1
+```
+Afterwards, activate the environment for your current terminal session:
+```powershell
+.\venv\Scripts\Activate.ps1
+```
+
+**Option B – Manual:**
 ```powershell
 python -m venv venv
-.\venv\Scripts\activate
+.\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 playwright install chromium
 ```

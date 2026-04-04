@@ -298,17 +298,30 @@ RULES:
     async def ensure_fresh_chat(self):
         """Surgical DOM-based reset to ensure a stateless environment with minimal overhead."""
         print("[AIStudioController] Ensuring fresh chat state (Surgical Reset)...")
-        
-        # ARE Hardening: Check for AI Studio 'Internal Error' modal which blocks everything
-        error_msg = self.page.get_by_text("An internal error has occurred").first
-        if await error_msg.count() > 0 and await error_msg.is_visible():
-            print("🚨 [AIStudioController] DETECTED 500 INTERNAL ERROR. Triggering Hard Reload...")
-            await self.page.reload()
-            await self.page.wait_for_load_state("networkidle")
-            await asyncio.sleep(5) # Give it time to settle
-        
+
+        # 1. Close UI Blockers (Popups, Restore bars)
+        print("[AIStudioController] Clearing UI Blockers...")
+        for _ in range(3):
+            await self.page.keyboard.press("Escape")
+            await asyncio.sleep(0.5)
+
+        blockers = ["Restore", "Dismiss", "Close", "Got it", "Accept"]
+        for text in blockers:
+            try:
+                btn = self.page.get_by_text(re.compile(text, re.I)).first
+                if await btn.count() > 0 and await btn.is_visible():
+                    print(f"[AIStudioController] Clicking Blocker: {text}")
+                    await btn.click(force=True)
+                    await asyncio.sleep(1)
+            except: pass
+
+        # 2. Force New Chat (Shortcut Ctrl+M is most reliable)
+        print("[AIStudioController] Triggering New Chat (Ctrl+M)...")
+        await self.page.keyboard.press("Control+m")
+        await asyncio.sleep(2)
+
         try:
-            # Step 1: Perform the Reset (Plan A: Button Click, Plan B: Link, Plan D: URL)
+            # Step 1: Verification of Reset (Fallback to Button if Shortcut fails)
             new_chat_btn = self.page.locator('button[aria-label="New chat"]').first
             if await new_chat_btn.is_visible():
                 print("[AIStudioController] Plan A: Clicking 'New Chat' button.")
@@ -433,14 +446,12 @@ RULES:
             # 2. CLEAR & INJECT
             print(f"[AIStudioController] Injiziere Prompt ({len(full_prompt)} chars)...")
             
-            # Focused Clearing
-            await prompt_box.focus()
-            await self.page.keyboard.press("Control+A")
-            await asyncio.sleep(0.2)
-            await self.page.keyboard.press("Backspace")
-            await asyncio.sleep(0.3)
+            # Focused Clearing (Surgical Wipe)
+            await prompt_box.fill('')
+            await asyncio.sleep(0.5)
             
             # Primary: insert_text (Simulates a paste event, triggers React/Lit listeners)
+            await prompt_box.focus()
             await self.page.keyboard.insert_text(full_prompt)
             await asyncio.sleep(0.5)
             
@@ -475,8 +486,8 @@ RULES:
             await self.page.keyboard.type(" ") # Final React trigger
             
             # 3b. UI-Freeze Stabilizer (Massive Prompts > 20k)
-            wait_time = 5.0 if len(prompt) > 20000 else 1.5
-            print(f"[AIStudioController] Paste verifiziert. Warten {wait_time}s...")
+            wait_time = 10.0 if len(prompt) > 20000 else 2.5
+            print(f"[AIStudioController] Paste verifiziert. Warte {wait_time}s auf UI-Stabilisierung...")
             await asyncio.sleep(wait_time)
             await self.update_milestone(Milestone.PROMPT_INJECTED)
 
@@ -581,7 +592,7 @@ RULES:
                 else:
                     stagnant_sec = time.time() - last_change_time
                     # ⚓ [Hardening] 90s (1.5m) Instead of 300s - LLMs don't sleep for 90s.
-                    if stagnant_sec > 90:
+                    if stagnant_sec > 180:
                         print(f"[AIStudioController] Stagnation detected after {stagnant_sec:.0f}s of silence.")
                         diag = await self.consult_oracle()
                         strategy = diag.get("strategy", "RELOAD_PAGE")

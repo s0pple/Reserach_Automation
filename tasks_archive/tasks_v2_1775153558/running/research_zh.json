@@ -1,0 +1,19 @@
+{
+    "task_id": "research_zh",
+    "prompt": "Research the following structural data for Canton Z\u00fcrich: canton_name, capital, joined_confederation, head_of_government, parliament_seats, population_latest, source_urls. Save the results EXACTLY as a raw JSON object in 'workspace/result_zh.json'. CRITICAL: Do NOT use markdown code blocks (no ```json). Output ONLY the raw JSON string. The JSON must be valid and contain all requested fields. Ensure you verify the data against official sources.",
+    "status": "failed",
+    "attempts": 3,
+    "retry_limit": 3,
+    "expected_file": "workspace/result_zh.json",
+    "started_at": "2026-04-02T18:24:22.209240",
+    "errors": "Process timed out (900s).",
+    "exit_code": 1,
+    "log_output": "--- Docker-Exec Run started at 2026-04-02 18:29:44 ---\nTask: research_zh\nContainer: mcp_gemini_1\n\n",
+    "output_snippet": "--- Docker-Exec Run started at 2026-04-02 18:29:44 ---\nTask: research_zh\nContainer: mcp_gemini_1\n\n",
+    "duration_sec": 339.98,
+    "finished_at": "2026-04-02T18:30:02.190817"
+}ror: lane=session:agent:main:main durationMs=236325 error=\"Error: session file locked (timeout 10000ms): pid=2627 /root/.openclaw/agents/main/sessions/aargau_simple.jsonl.lock\"\n[model-fallback/decision] model fallback decision: decision=candidate_failed requested=openai/gpt-4o candidate=openai/gpt-4o reason=timeout next=none\nFailoverError: session file locked (timeout 10000ms): pid=2627 /root/.openclaw/agents/main/sessions/aargau_simple.jsonl.lock\n",
+    "output_snippet": "--- Docker-Exec Run started at 2026-04-02 18:24:22 ---\nTask: research_zh\nContainer: mcp_gemini_1\n\n[diagnostic] lane task error: lane=main durationMs=236246 error=\"Error: session file locked (timeout 10000ms): pid=2627 /root/.openclaw/agents/main/sessions/aargau_simple.jsonl.lock\"\n[diagnostic] lane task error: lane=session:agent:main:main durationMs=236325 error=\"Error: session file locked (timeout 10000ms): pid=2627 /root/.openclaw/agents/main/sessions/aargau_simple.jsonl.lock\"\n[model-fallback/decision] model fallback decision: decision=candidate_failed requested=openai/gpt-4o candidate=openai/gpt-4o reason=timeout next=none\nFailoverError: session file locked (timeout 10000ms): pid=2627 /root/.openclaw/agents/main/sessions/aargau_simple.jsonl.lock\n",
+    "duration_sec": 900.14,
+    "finished_at": "2026-04-02T18:30:02.190617"
+}

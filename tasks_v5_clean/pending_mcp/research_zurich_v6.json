@@ -1,0 +1,7 @@
+{
+    "task_id": "zurich_v6_20260402_2232",
+    "prompt": "Research the following data for the Canton of Zurich (Switzerland). You MUST provide the result as a JSON object. The result MUST contain the 'task_id' field with the value 'zurich_v6_20260402_2232'. \n\nFields to research:\n1. canton_name\n2. capital\n3. joined_confederation\n4. head_of_government\n5. parliament_seats\n6. population_latest\n7. source_urls (list of URLs used)\n\nResearch freely using official sources like zh.ch or admin.ch. Save the final JSON to the workspace as 'result_zurich_v6_20260402_2232.json'.",
+    "status": "pending",
+    "attempts": 0,
+    "created_at": "2026-04-02T22:32:00Z"
+}

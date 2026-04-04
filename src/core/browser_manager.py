@@ -6,7 +6,7 @@ class BrowserManager:
     """
     Kapselt das Lifecycle-Management des Playwright-Browsers innerhalb des Docker-Containers.
     """
-    def __init__(self, playwright, profile_path: str = "/app/data/browser_sessions/acc1", headless: bool = True):
+    def __init__(self, playwright, profile_path: str = "/app/data/browser_sessions/acc1", headless: bool = False):
         self.playwright = playwright
         self.profile_path = profile_path
         self.headless = headless

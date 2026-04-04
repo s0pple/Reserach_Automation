@@ -1,0 +1,7 @@
+{
+    "task_id": "zurich_v6_20260402_2245_final",
+    "prompt": "Research the Canton of Zurich (Switzerland) with focus on official data. \n\nTarget URL: https://www.zh.ch/de/politik-staat/regierungsrat.html\n\nYou MUST create a JSON object containing the exact field 'task_id': 'zurich_v6_20260402_2245_final'.\n\nRequired Fields:\n1. canton_name (Zurich)\n2. capital (Zurich)\n3. joined_confederation (1351)\n4. head_of_government (Current Regierungspräsident)\n5. parliament_seats (Total seats in Kantonsrat)\n6. population_latest (Most recent official number)\n7. source_urls (List of URLs used)\n\nCRITICAL: Once research is complete, you MUST save this JSON object to the local file 'workspace/result_zurich_v6_20260402_2245_final.json'. This is your only definition of success.",
+    "status": "pending",
+    "attempts": 0,
+    "created_at": "2026-04-02T22:45:00Z"
+}

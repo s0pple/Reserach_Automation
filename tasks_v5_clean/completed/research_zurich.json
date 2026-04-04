@@ -1,0 +1,9 @@
+{
+    "task_id": "research_zurich",
+    "prompt": "F\u00fchre eine Recherche zum Kanton Z\u00fcrich durch. Extrahiere EXAKT diese 7 Felder: canton_name, capital, joined_confederation, head_of_government, parliament_seats, population_latest, source_urls. Speichere das Ergebnis als JSON-Struktur in workspace/result_zurich_v6.json. Jede Abweichung vom Schema f\u00fchrt zum Fail. Nutze das Tool write_research_file.",
+    "status": "running",
+    "attempts": 3,
+    "created_at": "2026-04-02T21:29:00Z",
+    "started_at": "2026-04-02T21:29:08.934296",
+    "finished_at": "2026-04-02T21:29:09.128404"
+}

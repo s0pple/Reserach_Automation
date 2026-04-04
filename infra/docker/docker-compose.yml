@@ -5,9 +5,13 @@ services:
       dockerfile: infra/docker/Dockerfile.mcp
     container_name: mcp_gemini_1
     restart: unless-stopped
+    shm_size: '2gb'
+    cap_add:
+      - SYS_ADMIN
     environment:
       - ACCOUNT_ID=acc_1
       - DISPLAY=:99
+      - OPENAI_BASE_URL=http://host.docker.internal:9002/v1
       - CHAOS_SABOTAGE=${CHAOS_SABOTAGE:-}
       - PYTHONPATH=/app
     volumes:
@@ -18,6 +22,8 @@ services:
       - ../../temp:/app/temp
       - ../../workspace:/app/workspace
       - ../../tasks:/app/tasks
+      - ../../../openclaw-main/MyClaw/openclaw-main:/app/openclaw-main
+      - /app/openclaw-main/node_modules
     ports:
       - "8001:8000"
       - "5901:5900"
@@ -29,9 +35,11 @@ services:
       dockerfile: infra/docker/Dockerfile.mcp
     container_name: mcp_gemini_2
     restart: unless-stopped
+    shm_size: '2gb'
     environment:
       - ACCOUNT_ID=acc_2
       - DISPLAY=:99
+      - OPENAI_BASE_URL=http://host.docker.internal:9002/v1
     volumes:
       - ../../output:/app/output
       - ../../src:/app/src

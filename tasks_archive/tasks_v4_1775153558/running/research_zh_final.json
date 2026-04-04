@@ -1,0 +1,10 @@
+{
+    "task_id": "research_zh_final",
+    "prompt": "Research the following structural data for Canton Z\u00fcrich: canton_name, capital, joined_confederation, head_of_government, parliament_seats, population_latest, source_urls. Save the results EXACTLY as a raw JSON object in 'workspace/result_zh_final.json'. CRITICAL: Do NOT use markdown code blocks (no ```json). Output ONLY the raw JSON string. The JSON must be valid and contain all requested fields. Ensure you verify the data against official sources.",
+    "status": "running",
+    "attempts": 1,
+    "retry_limit": 3,
+    "expected_file": "workspace/result_zh_final.json",
+    "started_at": "2026-04-02T20:02:41.206956",
+    "duration_sec": 902.12
+}

@@ -1,0 +1,15 @@
+{
+    "task_id": "research_zh_v4",
+    "prompt": "Research the following structural data for Canton Z\u00fcrich: canton_name, capital, joined_confederation, head_of_government, parliament_seats, population_latest, source_urls. Save the results EXACTLY as a raw JSON object in 'workspace/result_zh_v4.json'. CRITICAL: Do NOT use markdown code blocks (no ```json). Output ONLY the raw JSON string. The JSON must be valid and contain all requested fields. Ensure you verify the data against official sources.",
+    "status": "failed",
+    "attempts": 3,
+    "retry_limit": 3,
+    "expected_file": "workspace/result_zh_v4.json",
+    "started_at": "2026-04-02T19:16:12.736340",
+    "duration_sec": 900.14,
+    "errors": "Output file not found",
+    "exit_code": 1,
+    "log_output": "--- Docker-Exec Run started at 2026-04-02 19:16:12 ---\nTask: research_zh_v4\nContainer: mcp_gemini_1\n\n",
+    "output_snippet": "--- Docker-Exec Run started at 2026-04-02 19:16:12 ---\nTask: research_zh_v4\nContainer: mcp_gemini_1\n\n",
+    "finished_at": "2026-04-02T19:31:12.876524"
+}

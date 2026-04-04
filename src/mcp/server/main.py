@@ -40,7 +40,10 @@ class IronFortressHub:
             self.playwright = None
 
     async def get_page(self):
-        if not self.playwright:
+        if not self.playwright or not self.browser or not self.page or self.page.is_closed():
+            print("🌐 [MCP] Initializing fresh browser context...")
+            await self.close_browser()
+            
             self.playwright = await async_playwright().start()
             profile_path = os.path.join(self.data_dir, 'browser_sessions', self.account_id)
             os.makedirs(profile_path, exist_ok=True)
@@ -53,10 +56,14 @@ class IronFortressHub:
 
             self.browser = await self.playwright.chromium.launch_persistent_context(
                 user_data_dir=profile_path,
-                headless=True,
-                args=["--disable-dev-shm-usage", "--no-sandbox"]
+                headless=False,
+                args=["--disable-dev-shm-usage", "--no-sandbox", "--disable-blink-features=AutomationControlled", "--disable-infobars"]
             )
+            # Ensure at least one page exists
+            if not self.browser.pages:
+                await self.browser.new_page()
             self.page = self.browser.pages[0]
+            
         return self.page
 
 hub = IronFortressHub()

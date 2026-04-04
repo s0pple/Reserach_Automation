@@ -1,0 +1,13 @@
+{
+    "task_id": "aargau_simple",
+    "prompt": "Write 'Aargau 1803' into workspace/aargau_simple.txt",
+    "status": "failed",
+    "attempts": 4,
+    "started_at": "2026-04-02T14:54:44.585428",
+    "log_output": "--- Docker-Exec Run started at 2026-04-02 14:37:33 ---\nTask: aargau_simple\nContainer: mcp_gemini_1\n\nnode:internal/modules/package_json_reader:301\n  throw new ERR_MODULE_NOT_FOUND(packageName, fileURLToPath(base), null);\n        ^\n\nError [ERR_MODULE_NOT_FOUND]: Cannot find package 'tslog' imported from /app/openclaw-main/dist/logger-DuCGUzrw.js\n    at Object.getPackageJSONURL (node:internal/modules/package_json_reader:301:9)\n    at packageResolve (node:internal/modules/esm/resolve:768:81)\n    at moduleResolve (node:internal/modules/esm/resolve:859:18)\n    at defaultResolve (node:internal/modules/esm/resolve:991:11)\n    at #cachedDefaultResolve (node:internal/modules/esm/loader:719:20)\n    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:736:38)\n    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:765:52)\n    at #resolve (node:internal/modules/esm/loader:701:17)\n    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:621:35)\n    at ModuleJob.syncLink (node:internal/modules/esm/module_job:160:33) {\n  code: 'ERR_MODULE_NOT_FOUND'\n}\n\nNode.js v24.14.1\n",
+    "output_snippet": "    at #resolveAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:736:38)\n    at ModuleLoader.resolveSync (node:internal/modules/esm/loader:765:52)\n    at #resolve (node:internal/modules/esm/loader:701:17)\n    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:621:35)\n    at ModuleJob.syncLink (node:internal/modules/esm/module_job:160:33) {\n  code: 'ERR_MODULE_NOT_FOUND'\n}\n\nNode.js v24.14.1\n",
+    "errors": "Process timed out (300s).",
+    "duration_sec": 0.17,
+    "exit_code": 1,
+    "finished_at": "2026-04-02T15:04:44.716152"
+}

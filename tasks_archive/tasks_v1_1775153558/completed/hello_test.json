@@ -1,0 +1,9 @@
+{
+    "task_id": "hello_fresh_v33",
+    "prompt": "Say hello to the USER and confirm clearly that you are running inside the Docker container and can reach the API. Mention 'hello fresh v33' in your reply.",
+    "status": "failed",
+    "attempts": 0,
+    "started_at": "2026-04-02T14:15:59.340321",
+    "errors": "Reaped by Stale Task Reaper: Exceeded 30m timeout.",
+    "finished_at": "2026-04-02T14:21:03.876600"
+}

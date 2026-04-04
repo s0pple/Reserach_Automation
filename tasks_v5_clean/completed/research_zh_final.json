@@ -1,0 +1,9 @@
+{
+    "task_id": "research_zh_final",
+    "prompt": "Research the current government of Canton Z\u00fcrich. Provide structural data: canton_name, capital, head_of_government, parliament_size, major_parties. Return ONLY valid JSON.",
+    "status": "running",
+    "attempts": 3,
+    "created_at": "2026-04-02T18:14:00Z",
+    "started_at": "2026-04-02T20:24:59.499135",
+    "finished_at": "2026-04-02T20:24:59.637754"
+}

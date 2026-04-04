@@ -118,6 +118,45 @@ async def ask_browser_agent(prompt: str, model: str = "browser-agent-gemini", re
         log_proxy_event("MCP_ERROR", request_id=request_id, error=str(e))
         return f"Error: {str(e)}"
 
+@app.get("/v1/models")
+async def list_models():
+    """
+    OpenAI-compatible models endpoint.
+    Used by many agents (like OpenClaw) to verify API connectivity and model availability.
+    """
+    models_data = {
+        "object": "list",
+        "data": [
+            {
+                "id": "gpt-4o",
+                "object": "model",
+                "created": int(time.time()),
+                "owned_by": "gemini-proxy"
+            },
+            {
+                "id": "gpt-4",
+                "object": "model",
+                "created": int(time.time()),
+                "owned_by": "gemini-proxy"
+            },
+            {
+                "id": "gpt-3.5-turbo",
+                "object": "model",
+                "created": int(time.time()),
+                "owned_by": "gemini-proxy"
+            },
+            {
+                "id": "browser-agent-gemini",
+                "object": "model",
+                "created": int(time.time()),
+                "owned_by": "gemini-proxy"
+            }
+        ]
+    }
+    log_proxy_event("HTTP_MODELS_FETCHED")
+    return models_data
+
+
 @app.post("/v1/responses")
 async def legacy_responses(request: Request):
     return await chat_completions(request)
@@ -156,7 +195,13 @@ async def chat_completions(request: Request):
     
     # ARE Phase 3 Refined: Explicit Local Routing
     # Surgical check: Trigger ONLY if [local] is in a USER message.
-    # We handle both string and structured list content formats.
+    
+    # Model Normalization: Map incoming alias to the actual research engine
+    if model_lower in ["gpt-4o", "gpt-3.5-turbo", "gpt-4-turbo"]:
+        model = "browser-agent-gemini"
+        model_lower = model.lower()
+        log_proxy_event("MODEL_ALIAS_MAPPING", request_id=request_id, original=body.get("model"), resolved=model)
+
     def get_text(content):
         if isinstance(content, str):
             return content
@@ -257,4 +302,12 @@ async def health():
     return {"status": "ok"}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    import sys
+    port = 5000
+    if "--port" in sys.argv:
+        port_idx = sys.argv.index("--port")
+        if port_idx + 1 < len(sys.argv):
+            port = int(sys.argv[port_idx + 1])
+            
+    print(f"[BOOT] Starting proxy on port {port}...")
+    uvicorn.run(app, host="0.0.0.0", port=port)

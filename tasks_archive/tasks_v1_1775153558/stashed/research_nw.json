@@ -1,0 +1,8 @@
+{
+    "task_id": "research_nw",
+    "prompt": "Research the following structural data for Canton Nidwalden: canton_name, capital, joined_confederation, head_of_government, parliament_seats, population_latest, source_urls. Save the results EXACTLY as a raw JSON object in 'workspace/result_nw.json'. CRITICAL: Do NOT use markdown code blocks (no ```json). Output ONLY the raw JSON string. The JSON must be valid and contain all requested fields. Ensure you verify the data against official sources.",
+    "status": "pending",
+    "attempts": 0,
+    "retry_limit": 3,
+    "expected_file": "workspace/result_nw.json"
+}
